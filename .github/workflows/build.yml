@@ -16,12 +16,8 @@ jobs:
       - name: Engine tests
         run: swift test
 
-      - name: Build the app for the iPhone Simulator
-        run: |
-          set -o pipefail
-          xcodebuild -project TypeWrite.xcodeproj -scheme TypeWrite -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -n 60
+      - name: Build the app for the iPhone Simulator and the Mac
+        run: bash Tools/ci/build-apps.sh
 
       - name: Check the installer
         run: bash -n install.sh
