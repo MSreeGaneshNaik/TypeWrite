@@ -1,0 +1,23 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode
+        run: xcodebuild -version
+
+      - name: Engine tests
+        run: swift test
+
+      - name: Build the app for the iPhone Simulator and the Mac
+        run: bash Tools/ci/build-apps.sh
+
+      - name: Check the installer
+        run: bash -n install.sh

@@ -5,12 +5,12 @@
 <h1 align="center">TypeWrite <sub>by Jericho</sub></h1>
 
 <p align="center">
-  A typewriter in your browser and on your iPhone.<br>
+  A typewriter in your browser, on your Mac and on your iPhone.<br>
   Every key clacks, the bell rings near the margin, and the ink sits in old paper like the real thing.
 </p>
 
 <p align="center">
-  <a href="https://msreeganeshnaik.github.io/TypeWrite/"><b>Type in your browser</b></a> · <a href="#install-on-your-iphone"><b>Install on your iPhone</b></a>
+  <a href="https://msreeganeshnaik.github.io/TypeWrite/"><b>Type in your browser</b></a> · <a href="#install-on-your-mac-and-iphone"><b>Install on your Mac and iPhone</b></a>
 </p>
 
 ## Two ways to type
@@ -18,7 +18,7 @@
 | | Where | What you get |
 |---|---|---|
 | **Browser** | [msreeganeshnaik.github.io/TypeWrite](https://msreeganeshnaik.github.io/TypeWrite/) | Nothing to install. Type, then download the sheet as a picture or as plain text. Sheets stay in that browser. |
-| **iPhone** | One line in Terminal on a Mac (below) | The native app with real haptics. Sheets stay on the phone. |
+| **Mac and iPhone** | One line in Terminal on a Mac (below) | The native app: in your Applications folder, and on your iPhone when it's plugged in, with real haptics. Sheets stay on each device. |
 
 ## In the browser
 
@@ -31,7 +31,7 @@ Open [msreeganeshnaik.github.io/TypeWrite](https://msreeganeshnaik.github.io/Typ
 - **Read back** by dragging or flicking the page, or with the arrow keys, Page Up/Down, Home and End.
 - Without WebGL it falls back to a flat 2D drawing of the same page.
 
-## Install on your iPhone
+## Install on your Mac and iPhone
 
 Paste this into Terminal on your Mac:
 
@@ -41,8 +41,8 @@ curl -fsSL https://raw.githubusercontent.com/MSreeGaneshNaik/TypeWrite/main/inst
 
 It downloads the source, builds TypeWrite on your Mac with Xcode, and installs it:
 
-- **On your iPhone** if it's plugged in with a cable, unlocked and trusted. The app is signed with your own Apple ID; a free one works.
-- **In the iPhone Simulator** otherwise. It opens and starts TypeWrite for you.
+- **On your Mac**, in Applications (macOS 14 Sonoma or later). It's the same app, built for the Mac with Mac Catalyst, and signed to run on your Mac only, so it needs no Apple ID.
+- **On your iPhone too**, if it's plugged in with a cable, unlocked and trusted. The app is signed with your own Apple ID; a free one works.
 
 No account with us, no dependencies, nothing uploaded. The first build takes a few minutes.
 
@@ -59,8 +59,10 @@ Run the same line again. It compares the version you have with the latest on Git
 | Put this in front of `bash` | To |
 |---|---|
 | `TYPEWRITE_FORCE=1` | Rebuild even when you're up to date |
-| `TYPEWRITE_TARGET=simulator` | Always use the Simulator, even with an iPhone plugged in |
-| `TYPEWRITE_TARGET=iphone` | Insist on the iPhone and say what's missing if it can't |
+| `TYPEWRITE_TARGET=mac` | Only the Mac app, even with an iPhone plugged in |
+| `TYPEWRITE_TARGET=iphone` | Only the iPhone, and say what's missing if it can't |
+| `TYPEWRITE_TARGET=simulator` | Only the iPhone Simulator |
+| `TYPEWRITE_APPS=~/Applications` | Put the Mac app in this folder instead of /Applications |
 
 For example: `curl -fsSL … | TYPEWRITE_FORCE=1 bash`.
 
@@ -86,7 +88,7 @@ For example: `curl -fsSL … | TYPEWRITE_FORCE=1 bash`.
 
 ## Uninstall
 
-On the iPhone, press and hold TypeWrite → **Remove App**. In the Simulator:
+On the Mac, drag TypeWrite from Applications to the Bin. On the iPhone, press and hold TypeWrite → **Remove App**. In the Simulator:
 
 ```bash
 xcrun simctl uninstall booted com.jericho.typewrite
@@ -115,7 +117,7 @@ swift test             # the typing engine's tests
 | [`Branding`](Branding) | The app icon and Jericho tile as pure vector SVGs |
 | [`Tools`](Tools) | `make_sounds.py` and `make_icons.py`, which regenerate the sounds and icons |
 | [`EngineTests`](EngineTests) | Tests for the typing engine (`swift test`) |
-| [`Tools/ci`](Tools/ci) | The CI workflow: move `build.yml` into `.github/workflows/` to build and test on every push |
+| [`Tools/ci`](Tools/ci) | `build-apps.sh`, which CI runs on every push to build the app for the iPhone Simulator and the Mac |
 
 ## Credits
 
