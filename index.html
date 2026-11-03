@@ -9,8 +9,8 @@
 <meta name="color-scheme" content="light dark">
 <meta property="og:title" content="TypeWrite by Jericho">
 <meta property="og:description" content="A typewriter in your browser and on your iPhone. Every key clacks.">
-<meta property="og:image" content="Branding/AppIcon-1024.png">
-<link rel="icon" href="Branding/AppIcon-1024.png">
+<meta property="og:image" content="Branding/JerichoTile.png">
+<link rel="icon" type="image/png" href="Branding/JerichoTile.png">
 <link rel="apple-touch-icon" href="Branding/AppIcon-1024.png">
 <link rel="preload" href="TypeWrite/Resources/Fonts/CourierPrime-Regular.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="modulepreload" href="vendor/three/three.module.min.js">
@@ -541,14 +541,18 @@ function unlockAudio() {
   }
   if (audio.ctx.state === "suspended") audio.ctx.resume();
 }
-function play(name) {
+function play(name, volume = 1, rate = 1) {
   if (!soundOn || !audio.ctx || !audio.buffers[name]) return;
   const src = audio.ctx.createBufferSource();
   src.buffer = audio.buffers[name];
   const jitter = name === "bell" ? 0.008 : 0.035;
-  src.playbackRate.value = 1 + (Math.random() * 2 - 1) * jitter;
-  src.connect(audio.gain); src.start();
+  src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * jitter);
+  if (volume === 1) src.connect(audio.gain);
+  else { const v = audio.ctx.createGain(); v.gain.value = volume; src.connect(v); v.connect(audio.gain); }
+  src.start();
 }
+// The click of the platen's line ratchet: a small, bright key sound.
+function ratchet() { play("key3", 0.32, 1.9); buzz(3); }
 function playKey() {
   const keys = ["key1", "key2", "key3", "key4"];
   let pick = keys[Math.floor(Math.random() * 4)];
@@ -558,11 +562,11 @@ function playKey() {
 function buzz(ms) { if (buzzOn && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 function feedback(events) {
   for (const e of events) {
-    if (e === "key") { playKey(); buzz(6); }
-    else if (e === "space") { play("space"); buzz(4); }
+    if (e === "key") { playKey(); buzz(6); flashLamp(0); }
+    else if (e === "space") { play("space"); buzz(4); flashLamp(1); }
     else if (e === "bell") play("bell");
-    else if (e === "return") { play("return"); buzz(14); }
-    else if (e === "backspace") { play("backspace"); buzz(4); }
+    else if (e === "return") { play("return"); buzz(14); flashLamp(0); }
+    else if (e === "backspace") { play("backspace"); buzz(4); flashLamp(2); }
     else if (e === "jammed") { play("jam"); buzz([20, 40, 20]); }
   }
 }
@@ -822,7 +826,7 @@ if (motionQuery.addEventListener) motionQuery.addEventListener("change", e => { 
 const finePointer = () => matchMedia("(pointer: fine)").matches;
 
 // Where the parts sit, in sheet points relative to the line being typed (y up).
-const ROD_Y = -42, ROD_R = 7, PILL_R = 13.5, PILL_LEN = 82, PAPER_SHARE = 0.8, FOV = 30, BOW = 9, CURL = 44;
+const ROD_Y = -42, ROD_R = 7, PILL_R = 13.5, PILL_LEN = 82, BEND_Y = -24, PLATEN_R = 44, PAPER_SHARE = 0.8, FOV = 30, BOW = 9, CURL = 44;
 let typing = false, review = 0, lampOn = store.get("tw.lamp", false);
 let W = 0, H = 0, DPR = 1, zoom = 1;
 const spring = {
@@ -832,6 +836,10 @@ const spring = {
   lamp: { v: 0, vel: 0, to: 0, resp: 0.55, damp: 1 },   // desk lamp, 0 to 1
 };
 let running = false, lastT = 0, coast = null;
+const lampGlow = [0, 0, 0];                   // green: a key, amber: space, red: taking a letter back
+function flashLamp(i) { lampGlow[i] = 1; kick(); }
+let handRollUntil = 0, lastRollLine = null, lastTick = 0;
+function rollingByHand() { handRollUntil = performance.now() + 700; }
 
 function camDist() { return (H / 2) / zoom / Math.tan(FOV * Math.PI / 360); }
 function paperDepth(x) { const nx = 2 * x / PAPER_W; return -BOW * nx * nx; }
@@ -844,11 +852,16 @@ function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
 function setFeel(names, resp, damp) { for (const n of names) { spring[n].resp = resp; spring[n].damp = damp; } }
 function caretX() { return SIDE + (Math.min(typist.layout.col, COLS) + 0.5) * ADV; }
 function viewportH() { const vv = window.visualViewport; return vv ? vv.height + vv.offsetTop : innerHeight; }
+// The type line sits as low as the machine allows: room under it for the rod, the guide and the dock.
+function strikeLine() {
+  const vh = viewportH(), below = (-ROD_Y + PILL_R) * zoom + 104;
+  return Math.round(clamp(vh - below, vh * 0.5, vh * 0.76));
+}
 function reviewLimit() { return typist.layout.line * LH + topMargin(sheet); }
 function retarget(jump) {
   spring.x.to = caretX();
   spring.y.to = typist.layout.line * LH - review;
-  spring.sy.to = Math.round(viewportH() * 0.6);
+  spring.sy.to = strikeLine();
   spring.lamp.to = lampOn ? 1 : 0;
   if (jump) for (const k in spring) { spring[k].v = spring[k].to; spring[k].vel = 0; }
 }
@@ -880,8 +893,13 @@ function frame(t) {
     const r = reduceMotion ? 0.06 : s.resp, d = reduceMotion ? 1 : s.damp;
     for (let i = 0; i < steps; i++) stepSpring(s, h, r, d);
   }
+  for (let i = 0; i < 3; i++) lampGlow[i] = lampGlow[i] < 0.004 ? 0 : lampGlow[i] * Math.exp(-dt * (reduceMotion ? 30 : 5.5));
+  // The platen's ratchet: a soft click for each line the page is rolled past by hand.
+  const rollLine = Math.round(spring.y.v / LH);
+  if (lastRollLine !== null && rollLine !== lastRollLine && performance.now() < handRollUntil && t - lastTick > 28) { ratchet(); lastTick = t; }
+  lastRollLine = rollLine;
   try { draw(); } catch (err) { running = false; throw err; }
-  const settled = !coast && Object.values(spring).every(s => Math.abs(s.v - s.to) < 0.01 && Math.abs(s.vel) < 0.01);
+  const settled = lampGlow.every(g => g === 0) && !coast && Object.values(spring).every(s => Math.abs(s.v - s.to) < 0.01 && Math.abs(s.vel) < 0.01);
   if (settled) { for (const k in spring) { spring[k].v = spring[k].to; spring[k].vel = 0; } draw(); running = false; }
   else requestAnimationFrame(frame);
 }
@@ -922,8 +940,8 @@ function placeGhost() {
 // ---------- three.js: the page, the rod and the guide ----------
 let GL = null, THREE = null;
 const PAPER_VS = `
-uniform float uPaperW, uPaperH, uWinTop, uWinH, uTopY, uBow, uCurl, uFlat;
-varying vec2 vSheet; varying vec3 vWorld; varying vec3 vNormal; varying float vCurl;
+uniform float uPaperW, uPaperH, uWinTop, uWinH, uTopY, uBow, uCurl, uFlat, uBendY, uBendR;
+varying vec2 vSheet; varying vec3 vWorld; varying vec3 vNormal; varying float vCurl; varying float vRoll;
 void main() {
   float sx = (position.x + 0.5) * uPaperW;
   float sy = clamp(uWinTop + (0.5 - position.y) * uWinH, 0.0, uPaperH);
@@ -936,9 +954,25 @@ void main() {
   float z = -(uBow * nx * nx + uCurl * t * t * shape) * k;
   float dzdx = -(uBow * 2.0 * nx + uCurl * t * t * 1.4 * nx) * (2.0 / uPaperW) * k;
   float dzdsy = (uCurl * 2.0 * t * shape / 64.0) * k;
-  vNormal = normalize(vec3(-dzdx, dzdsy, 1.0));
+  vec3 nrm = normalize(vec3(-dzdx, dzdsy, 1.0));
+  float y = uTopY - sy;
+  vRoll = 0.0;
+  // Below the type line the sheet wraps round the platen, the way paper does in a real machine:
+  // rolling the page back carries the lines down over the roller and out of sight.
+  if (k > 0.0 && y < uBendY) {
+    float s = uBendY - y;
+    float a = min(s / uBendR, 3.14159265);
+    float beyond = max(s - 3.14159265 * uBendR, 0.0);
+    float yb = uBendY - uBendR * sin(a);
+    float zb = -uBendR * (1.0 - cos(a)) - beyond;
+    y = mix(y, yb, k);
+    z += zb * k;
+    nrm = normalize(mix(nrm, vec3(0.0, -sin(a), cos(a)), k));
+    vRoll = a / 3.14159265;
+  }
+  vNormal = nrm;
   vCurl = t * k;
-  vec4 wp = modelMatrix * vec4(sx - uPaperW * 0.5, uTopY - sy, z, 1.0);
+  vec4 wp = modelMatrix * vec4(sx - uPaperW * 0.5, y, z, 1.0);
   vWorld = wp.xyz;
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
@@ -951,7 +985,7 @@ uniform sampler2D uFlower; uniform vec4 uFlowerRect; uniform float uFlowerOn;
 uniform float uLamp; uniform vec3 uLampPos; uniform float uLampReach;
 uniform float uPxPerPt; uniform vec2 uView;
 uniform float uRodY, uRodR, uCaretX;
-varying vec2 vSheet; varying vec3 vWorld; varying vec3 vNormal; varying float vCurl;
+varying vec2 vSheet; varying vec3 vWorld; varying vec3 vNormal; varying float vCurl; varying float vRoll;
 
 float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec2 p) {
@@ -1037,7 +1071,7 @@ void main() {
   vec3 N = normalize(vNormal + vec3(-grad, 0.0) * 0.14);
   vec3 KEY = normalize(vec3(-0.35, 0.55, 1.0));
   float lit = dot(N, KEY) / KEY.z;
-  float day = mix(1.0, lit, 0.9);
+  float day = max(mix(1.0, lit, 0.9), 0.12) * (1.0 - 0.35 * smoothstep(0.18, 0.5, vRoll));
   vec2 scr = gl_FragCoord.xy / uView;
   float vig = 1.0 - (0.11 * smoothstep(0.5, 1.0, scr.y) + 0.05 * smoothstep(0.3, 0.0, scr.y) + 0.06 * smoothstep(0.55, 1.0, abs(scr.x - 0.5) * 2.0)) * (1.0 - uFlat);
   day *= vig * (1.0 - 0.1 * vCurl);
@@ -1095,6 +1129,7 @@ async function initGL() {
     uLamp: { value: 0 }, uLampPos: { value: new THREE.Vector3() }, uLampReach: { value: 120 },
     uPxPerPt: { value: 1 }, uView: { value: new THREE.Vector2(1, 1) },
     uRodY: { value: ROD_Y }, uRodR: { value: ROD_R }, uCaretX: { value: 0 },
+    uBendY: { value: BEND_Y }, uBendR: { value: PLATEN_R },
   };
   const paperMat = new THREE.ShaderMaterial({ uniforms, vertexShader: PAPER_VS, fragmentShader: PAPER_FS, extensions: { derivatives: true },
     transparent: true, premultipliedAlpha: true, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor });
@@ -1109,19 +1144,44 @@ async function initGL() {
   const capGeo = new THREE.CylinderGeometry(ROD_R + 2.2, ROD_R + 2.2, 15, 40);
   const capL = new THREE.Mesh(capGeo, black), capR = new THREE.Mesh(capGeo, black);
   capL.rotation.z = capR.rotation.z = Math.PI / 2; scene.add(capL, capR);
+  // The platen: the rubber roller the sheet wraps round, just behind the rod.
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x121110, roughness: 0.74, metalness: 0 });
+  const platen = new THREE.Mesh(new THREE.CylinderGeometry(PLATEN_R - 0.6, PLATEN_R - 0.6, 1, 72, 1, true), rubber);
+  platen.rotation.z = Math.PI / 2; scene.add(platen);
+
   const guide = new THREE.Group(); scene.add(guide);
-  const pillMat = new THREE.MeshStandardMaterial({ color: 0xF1EDE4, roughness: 0.42, metalness: 0 });
-  const pill = new THREE.Mesh(new THREE.CapsuleGeometry(PILL_R, PILL_LEN - PILL_R * 2, 12, 40), pillMat);
+  // Glossy ivory enamel.
+  const pillMat = new THREE.MeshPhysicalMaterial({ color: 0xEFEAE0, roughness: 0.34, metalness: 0, clearcoat: 0.85, clearcoatRoughness: 0.22 });
+  const pill = new THREE.Mesh(new THREE.CapsuleGeometry(PILL_R, PILL_LEN - PILL_R * 2, 16, 48), pillMat);
   pill.rotation.z = Math.PI / 2; pill.scale.set(1, 1, 0.82); pill.position.set(0, 0, 4); guide.add(pill);
-  const dotGeo = new THREE.SphereGeometry(2.3, 20, 12);
-  const statusMat = new THREE.MeshStandardMaterial({ color: 0x3fae5a, emissive: 0x3fae5a, emissiveIntensity: 0.35, roughness: 0.3 });
-  const dots = [statusMat, new THREE.MeshStandardMaterial({ color: 0x1b1918, roughness: 0.35 }), new THREE.MeshStandardMaterial({ color: 0x8e3a30, roughness: 0.35 })]
-    .map((m, i) => { const d = new THREE.Mesh(dotGeo, m); d.position.set((i - 1) * 9 - 2, -0.5, 4 + PILL_R * 0.82 - 0.9); d.scale.set(1, 1, 0.5); guide.add(d); return d; });
-  const pointerMat = new THREE.MeshStandardMaterial({ color: 0x3b3936, metalness: 0.55, roughness: 0.38 });
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(8.5, 1.7, 1.7), pointerMat);
-  const stem = new THREE.Mesh(new THREE.BoxGeometry(1.7, 15, 1.7), pointerMat);
-  bar.position.set(0, -ROD_Y - 7, 1); stem.position.set(0, -ROD_Y - 14.5, 1);   // relative to the guide, which sits on the rod
-  guide.add(bar, stem);
+  const front = 4 + PILL_R * 0.82;                                   // the capsule's front face
+  // Three radium lamps: green strikes a key, amber the space bar, red takes a letter back.
+  const LAMP_COLOURS = [0x3dff7a, 0xffc23d, 0xff4438];
+  const lampGeo = new THREE.SphereGeometry(3.1, 24, 16);
+  const glowCanvas = document.createElement("canvas"); glowCanvas.width = glowCanvas.height = 128;
+  const gg = glowCanvas.getContext("2d"), glowGrad = gg.createRadialGradient(64, 64, 0, 64, 64, 64);
+  glowGrad.addColorStop(0, "rgba(255,255,255,1)"); glowGrad.addColorStop(0.18, "rgba(255,255,255,.55)"); glowGrad.addColorStop(0.45, "rgba(255,255,255,.12)"); glowGrad.addColorStop(1, "rgba(255,255,255,0)");
+  gg.fillStyle = glowGrad; gg.fillRect(0, 0, 128, 128);
+  const glowTex = new THREE.CanvasTexture(glowCanvas);
+  const haloGeo = new THREE.PlaneGeometry(1, 1);
+  const lamps = LAMP_COLOURS.map((hex, i) => {
+    // At rest a lamp is a dim, faintly glowing bead; a strike flares it to full colour with a halo.
+    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(hex).multiplyScalar(0.32), emissive: hex, emissiveIntensity: 0.2, roughness: 0.22 });
+    const bulb = new THREE.Mesh(lampGeo, mat);
+    bulb.position.set((i - 1) * 10.5, 0, front + 0.6); bulb.scale.set(1, 1, 0.55); guide.add(bulb);
+    const haloMat = new THREE.MeshBasicMaterial({ map: glowTex, color: hex, transparent: true, opacity: 0, depthWrite: false, depthTest: false });   // normal blend: additive washes out to white on the cream
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.position.set((i - 1) * 10.5, 0, front + 3.4); halo.renderOrder = 20; guide.add(halo);
+    return { mat, halo };
+  });
+  // The T pointer: its foot sits in the capsule, its bar just under the type line.
+  const pointerMat = new THREE.MeshStandardMaterial({ color: 0x3b3936, metalness: 0.6, roughness: 0.34 });
+  const stemTop = -ROD_Y - 7, stemBottom = PILL_R - 1.5;
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(9.5, 2, 2), pointerMat);
+  const stem = new THREE.Mesh(new THREE.BoxGeometry(2, stemTop - stemBottom, 2), pointerMat);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3.2, 2.2, 24), pointerMat);
+  bar.position.set(0, stemTop, 2); stem.position.set(0, (stemTop + stemBottom) / 2, 2); collar.position.set(0, PILL_R - 0.6, 2.5);
+  guide.add(bar, stem, collar);
 
   const ambient = new THREE.HemisphereLight(0xfffdf8, 0x3a3631, 1.1);
   const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(-0.35, 0.8, 1);
@@ -1246,16 +1306,21 @@ async function initGL() {
     rod.position.set(0, rodY, zRod); capL.position.set(-half + 7, rodY, zRod); capR.position.set(half - 7, rodY, zRod);
     const zGuide = zRod + ROD_R * 0.4, kGuide = (dist - zGuide) / (dist - paperDepth(cx));
     guide.position.set(cx * kGuide, camY + (ROD_Y - camY) * kGuide, zGuide);
-    // The left lamp on the guide: green, then amber, then red once the bell has rung.
-    const col = typist.layout.col, near = col >= BELL_COL ? 1 : col >= BELL_COL - 6 ? 0.5 : 0;
-    statusMat.color.set(near === 1 ? 0xd2493a : near === 0.5 ? 0xe0a032 : 0x3fae5a); statusMat.emissive.copy(statusMat.color);
+    platen.scale.set(1, half * 2 + 60, 1); platen.position.set(0, BEND_Y, -(PLATEN_R + BOW + 0.6));   // behind the sheet's bowed edges too
+    // The lamps glow faintly like radium paint, and flare when their key is struck.
+    lamps.forEach((l, i) => {
+      const g = lampGlow[i];
+      l.mat.emissiveIntensity = 0.25 + 0.9 * g;
+      l.halo.material.opacity = 0.8 * g;
+      const sz = 10 + 22 * g; l.halo.scale.set(sz, sz, 1);
+    });
     const lamp = spring.lamp.v;
     uniforms.uLamp.value = lamp;
     uniforms.uLampPos.value.set(cx, -8, 34);
     ambient.intensity = 1.1 * (1 - lamp * 0.85); key.intensity = 2.2 * (1 - lamp * 0.9);
     lampLight.position.set(cx * kGuide, camY + (-6 - camY) * kGuide, 40); lampLight.intensity = 2.6 * lamp;
-    steel.envMapIntensity = 1 - lamp * 0.75; black.envMapIntensity = 1 - lamp * 0.75; pillMat.envMapIntensity = 0.45 * (1 - lamp * 0.7);
-    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
+    steel.envMapIntensity = 1 - lamp * 0.75; black.envMapIntensity = 1 - lamp * 0.75; pillMat.envMapIntensity = 0.6 * (1 - lamp * 0.7);
+    rubber.envMapIntensity = 0.22 * (1 - lamp * 0.8);    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
     renderer.setClearColor(0x161514, 1);
     renderer.render(scene, camera);
   }
@@ -1272,7 +1337,7 @@ async function initGL() {
     const cam = new THREE.OrthographicCamera(-PAPER_W / 2, PAPER_W / 2, 0, -1, -200, 200);
     const keep = {}; for (const k of ["uFlat", "uInk", "uInkTop", "uInkH", "uWinTop", "uWinH", "uTopY", "uPaperH", "uLamp", "uPxPerPt"]) keep[k] = uniforms[k].value;
     const keepView = uniforms.uView.value.clone();
-    const hidden = [rod, capL, capR, guide];
+    const hidden = [rod, capL, capR, guide, platen];
     hidden.forEach(o => { o.visible = false; });
     renderer.setPixelRatio(1); renderer.setClearColor(0x000000, 0);
     try {
@@ -1324,10 +1389,10 @@ function draw2D() {
   g.fillStyle = "#9a9da3"; g.fillRect(0, ry - ROD_R * z, W, 2 * z);
   g.fillStyle = "#141414"; g.fillRect(0, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z); g.fillRect(W - 14 * z, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z);
   g.fillStyle = "#F1EDE4"; g.beginPath(); g.roundRect(cx - PILL_LEN / 2 * z, ry - PILL_R * z, PILL_LEN * z, PILL_R * 2 * z, PILL_R * z); g.fill();
-  const col = typist.layout.col;
-  ["#3fae5a", "#1b1918", "#8e3a30"].forEach((c, i) => {
-    g.fillStyle = i === 0 ? (col >= BELL_COL ? "#d2493a" : col >= BELL_COL - 6 ? "#e0a032" : c) : c;
-    g.beginPath(); g.arc(cx + ((i - 1) * 9 - 2) * z, ry, 2.3 * z, 0, Math.PI * 2); g.fill();
+  ["#3dff7a", "#ffc23d", "#ff4438"].forEach((c, i) => {
+    const x = cx + (i - 1) * 10.5 * z, glow = lampGlow[i];
+    g.save(); g.shadowColor = c; g.shadowBlur = (4 + 14 * glow) * z; g.globalAlpha = 0.65 + 0.35 * glow;
+    g.fillStyle = c; g.beginPath(); g.arc(x, ry, 3.1 * z, 0, Math.PI * 2); g.fill(); g.restore();
   });
   g.fillStyle = "#3b3936"; g.fillRect(cx - 4.25 * z, sy + 6 * z, 8.5 * z, 1.7 * z); g.fillRect(cx - 0.85 * z, sy + 7 * z, 1.7 * z, 15 * z);
 }
@@ -1433,7 +1498,7 @@ stage.addEventListener("pointermove", e => {
   const raw = drag.start + dy / zoom, lim = reviewLimit(), dim = H / zoom;
   review = raw < 0 ? -rubber(-raw, dim) : raw > lim ? lim + rubber(raw - lim, dim) : raw;
   spring.y.to = spring.y.v = typist.layout.line * LH - review; spring.y.vel = 0;
-  kick();
+  rollingByHand(); kick();
 });
 function endDrag(e) {
   if (!drag || e.pointerId !== drag.id) return;
@@ -1449,7 +1514,7 @@ function endDrag(e) {
     review = Math.min(Math.max(review, 0), lim);
     spring.y.to = typist.layout.line * LH - review; spring.y.vel = -v; setFeel(["y"], 0.42, 1);
   } else if (Math.abs(v) > 30 && !reduceMotion) {
-    coast = { v };
+    coast = { v }; handRollUntil = performance.now() + 2500;
   } else { spring.y.to = spring.y.v; }
   kick();
 }
@@ -1458,12 +1523,12 @@ stage.addEventListener("pointercancel", endDrag);
 stage.addEventListener("wheel", e => {
   e.preventDefault(); coast = null;
   review = Math.min(Math.max(review - e.deltaY / zoom, 0), reviewLimit());
-  setFeel(["y"], 0.14, 1); retarget(); kick();
+  rollingByHand(); setFeel(["y"], 0.14, 1); retarget(); kick();
 }, { passive: false });
 function scrollBy(points) {
   coast = null;
   review = Math.min(Math.max(review + points, 0), reviewLimit());
-  setFeel(["y"], 0.38, 1); retarget(); kick();
+  rollingByHand(); setFeel(["y"], 0.38, 1); retarget(); kick();
 }
 document.addEventListener("keydown", e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
@@ -1769,9 +1834,25 @@ function fileBase() {
   const first = (sheet.text.split("\n").find(l => l.trim()) || "sheet").trim().slice(0, 40).replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase();
   return "typewrite-" + (first || "sheet");
 }
-function saveBlob(blob, name) {
+// Opened inside the Claude artifact viewer, files are offered through its save prompt;
+// everywhere else (GitHub Pages), through an ordinary download link.
+let viewerDownloads = null;
+if (window.claude && typeof window.claude.use === "function") {
+  window.claude.use("downloads").then(d => { viewerDownloads = d; }).catch(() => {});
+}
+async function saveBlob(blob, name) {
+  if (viewerDownloads) {
+    try { await viewerDownloads.save({ filename: name, data: blob }); return true; }
+    catch (e) {
+      const code = e && e.code;
+      if (code === "declined") return false;
+      if (code === "rate_limited") { toast("A save is already waiting for an answer."); return false; }
+      if (code !== "unavailable" && code !== "not_granted" && code !== "capability_disabled" && code !== "capability_removed") { toast("Couldn't save that file here."); return false; }
+    }
+  }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  return true;
 }
 function exportPng() {
   const L = layoutChars(typist.chars), h = sheetHeight(sheet, L), scale = Math.min(3, 14000 / h);
@@ -1781,11 +1862,14 @@ function exportPng() {
     c = document.createElement("canvas"); c.width = Math.round(PAPER_W * scale); c.height = Math.round(h * scale);
     const g = c.getContext("2d"); g.scale(scale, scale); drawSheet(g, sheet, L, 0, 0, h, PAPER_W, h, false);
   }
-  c.toBlob(b => { if (b) { saveBlob(b, fileBase() + ".png"); toast("Saved the picture."); } else toast("Couldn't make the picture. Try the words instead."); }, "image/png");
+  c.toBlob(async b => {
+    if (!b) { toast("Couldn't make the picture. Try the words instead."); return; }
+    if (await saveBlob(b, fileBase() + ".png")) toast("Saved the picture.");
+  }, "image/png");
 }
 function exportTxt() {
-  saveBlob(new Blob([sheet.text.replace(/\s+$/, "") + "\n"], { type: "text/plain;charset=utf-8" }), fileBase() + ".txt");
-  toast("Saved the words.");
+  saveBlob(new Blob([sheet.text.replace(/\s+$/, "") + "\n"], { type: "text/plain;charset=utf-8" }), fileBase() + ".txt")
+    .then(saved => { if (saved) toast("Saved the words."); });
 }
 
 // ---------- Wiring ----------
