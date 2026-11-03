@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>TypeWrite by Jericho</title>
 <meta name="description" content="A typewriter in your browser. Every key clacks, the bell rings near the margin, and the ink sits in old paper like the real thing. Download your sheet when you're done.">
-<meta name="theme-color" content="#C9D2D0">
+<meta name="theme-color" content="#161514">
 <meta name="color-scheme" content="light dark">
 <meta property="og:title" content="TypeWrite by Jericho">
 <meta property="og:description" content="A typewriter in your browser and on your iPhone. Every key clacks.">
@@ -22,7 +22,7 @@
   @font-face { font-family: "Lekton"; src: url("TypeWrite/Resources/Fonts/Lekton-Regular.ttf") format("truetype"); font-display: block; }
 
   :root {
-    --desk: #E7E1CF;   /* the morning mist, until the painted view is up */
+    --desk: #161514;
     /* Chrome that floats over the page: near-neutral light surfaces and dark words. */
     --surface: #F2F1EE; --raised: #E6E4DF; --rule: #DAD7D0; --control: #C9C5BC;
     --text: #23211E; --muted: #55504A; --faint: #6A645B;
@@ -1043,13 +1043,12 @@ function frame(t) {
   if (lastRollLine !== null && rollLine !== lastRollLine && performance.now() < handRollUntil && t - lastTick > 28) { ratchet(); lastTick = t; }
   lastRollLine = rollLine;
   try { draw(); } catch (err) { running = false; throw err; }
-  startView();
   const settled = lampGlow.every(g => g === 0) && !coast && Object.values(spring).every(s => Math.abs(s.v - s.to) < 0.01 && Math.abs(s.vel) < 0.01);
   if (settled) { for (const k in spring) { spring[k].v = spring[k].to; spring[k].vel = 0; } draw(); running = false; }
   else requestAnimationFrame(frame);
 }
 function resize() {
-  W = innerWidth; H = innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 3);
+  W = innerWidth; H = innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
   zoom = PAPER_SHARE * W / PAPER_W;
   if (GL) GL.resize(); else resize2D();
   forgetHudBoxes(); retarget(true); kick();
@@ -1062,7 +1061,7 @@ function draw() {
   for (const el of hudSides) {
     if (!el.box) el.box = el.getBoundingClientRect();
     const cx = el.box.left + el.box.width / 2, cy = el.box.top + el.box.height / 2;
-    el.classList.toggle("on-desk", spring.lamp.v > 0.5);   // dark icons on the day sky, light ones at night
+    el.classList.toggle("on-desk", spring.lamp.v > 0.5 || cy < paperTop || cx < left + 6 || cx > right - 6);
   }
   placeGhost();
 }
@@ -1252,837 +1251,24 @@ void main() {
 }`;
 const hex3 = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 
-// ---------- The view: a painted sky and land behind the machine, sunrise by day, moonlit with the lamp on ----------
-// painting(px, res): px from the top-left in device pixels. uRollerY: where the roller begins. uNight: 0 day, 1 night.
-const PAINT_GLSL = `
-#ifndef SSAA
-#define SSAA 1            // 1: 4x rotated-grid supersampling, 0: one sample per pixel
-#endif
-#ifndef SSAA_ADAPTIVE
-#define SSAA_ADAPTIVE 1   // 1: only supersample 2x2 quads with visible contrast
-#endif
-#ifndef SSAA_THRESHOLD
-#define SSAA_THRESHOLD 0.035
-#endif
-
-uniform float uRollerY;
-uniform float uNight;
-
-// ---------------------------------------------------------------- palette ---
-const vec3 C_ZENITH  = vec3(0.749, 0.796, 0.796); // #BFCBCB
-const vec3 C_CREAM   = vec3(0.949, 0.894, 0.776); // #F2E4C6
-const vec3 C_PEACH   = vec3(0.965, 0.835, 0.604); // #F6D59A
-const vec3 C_SUN     = vec3(1.000, 0.969, 0.890); // #FFF7E3
-const vec3 C_CLOUDHI = vec3(0.984, 0.941, 0.847); // #FBF0D8
-const vec3 C_CLOUDSH = vec3(0.722, 0.702, 0.765); // #B8B3C3
-const vec3 C_FAR     = vec3(0.682, 0.714, 0.635); // #AEB6A2
-const vec3 C_MID     = vec3(0.557, 0.604, 0.424); // #8E9A6C
-const vec3 C_MEADOW1 = vec3(0.784, 0.749, 0.475); // #C8BF79
-const vec3 C_MEADOW2 = vec3(0.655, 0.651, 0.369); // #A7A65E
-const vec3 C_YELLOW  = vec3(0.953, 0.769, 0.263); // #F3C443
-const vec3 C_ORANGE  = vec3(0.933, 0.604, 0.298); // #EE9A4C
-const vec3 C_WHITE   = vec3(1.000, 0.961, 0.875); // #FFF5DF
-const vec3 C_MIST    = vec3(0.969, 0.941, 0.886); // #F7F0E2
-
-// ------------------------------------------------------------ hash / noise --
-float h11(float p) { p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
-float h12(vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
-vec3 h32(vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
-  p3 += dot(p3, p3.yxz + 33.33);
-  return fract((p3.xxy + p3.yzz) * p3.zyx);
-}
-float vn(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = p - i;
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  float a = h12(i);
-  float b = h12(i + vec2(1.0, 0.0));
-  float c = h12(i + vec2(0.0, 1.0));
-  float d = h12(i + vec2(1.0, 1.0));
-  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
-float vn1(float x) {
-  float i = floor(x);
-  float f = x - i;
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(h11(i), h11(i + 1.0), f);
-}
-float fbm1(float x) {
-  float s = 0.5 * vn1(x); x = x * 2.07 + 1.3;
-  s += 0.25 * vn1(x);     x = x * 2.11 + 4.7;
-  s += 0.125 * vn1(x);
-  return s / 0.875;
-}
-
-// directional brush texture: long along dir, narrow across. Returns ~[0,1].
-float brush(vec2 p, vec2 dir, float len, float wid) {
-  vec2 q = vec2(dot(p, dir), dot(p, vec2(-dir.y, dir.x)));
-  return vn(vec2(q.x / len, q.y / wid));
-}
-// turn a smooth value into soft painted tonal steps whose borders wander with n
-float bands(float v, float n, float levels, float soft) {
-  float x = v * levels + (n - 0.5) * 0.9;
-  float i = floor(x);
-  float f = x - i;
-  return (i + smoothstep(0.5 - soft, 0.5 + soft, f)) / levels;
-}
-
-// ------------------------------------------------------------ time of day --
-// everything below depends on uNight only through these per-pixel globals
-float gHalfW, gHor, gRoll;
-vec2  gSun, gSunDay, gMoon;
-vec4  gW;                         // keyframe weights: day, sunset, dusk, night
-float gSet, gNight, gMoonVis, gSunVis, gLightMix, gLightUp;
-vec3  gZen, gMidSky, gHorSky, gGlowC, gCoreC, gTwiC;
-float gGlowAmt, gTwiAmt, gBloomAmt, gCoreAmt;
-vec3  gCSh, gCMid, gCLit, gRim;
-float gRimAmt, gNearWarm, gCloudK, gChroma, gRimW;
-vec3  gFarG, gNearG;              // land grade (far / near), weighted by non-day keys
-
-vec3  tod(vec3 a, vec3 b, vec3 c, vec3 d) { return a * gW.x + b * gW.y + c * gW.z + d * gW.w; }
-float todf(vec4 v) { return dot(v, gW); }
-
-void setupScene(vec2 res) {
-  float H = res.y;
-  gHalfW = 0.5 * res.x / H;
-  gRoll = (uRollerY > 1.0 ? uRollerY : 0.7 * H) / H;
-  gHor = gRoll - 0.22;
-  float u = clamp(uNight, 0.0, 1.0);
-  float ka = smoothstep(0.0, 0.35, u), kb = smoothstep(0.35, 0.62, u), kc = smoothstep(0.62, 1.0, u);
-  gW = vec4(1.0 - ka, ka - kb, kb - kc, kc);
-
-  // the sun swings along an arc, down and to the right, behind the far hills
-  gSunDay = vec2(0.0, clamp(gHor - 0.10, 0.30, 0.40));
-  gSet = pow(clamp(u * 2.0, 0.0, 1.0), 1.3);       // touches the hills around 0.35
-  float ph = gSet * 1.5708;
-  vec2 s1 = vec2(min(0.30, gHalfW * 0.6), gHor + 0.05);
-  gSun = vec2(s1.x * sin(ph), gSunDay.y + (s1.y - gSunDay.y) * (1.0 - cos(ph)));
-  gSunVis = 1.0 - smoothstep(0.42, 0.56, u);
-  // the moon rises on the opposite side
-  float mr = smoothstep(0.42, 1.0, u);
-  float pm = mr * 1.5708;
-  vec2 m0 = vec2(-min(0.34, gHalfW * 0.62), gHor + 0.06);
-  vec2 m1 = vec2(-min(0.22, gHalfW * 0.25), mix(0.29, 0.22, smoothstep(0.2, 0.9, gHalfW)));
-  gMoon = vec2(m0.x + (m1.x - m0.x) * (1.0 - cos(pm)), m0.y + (m1.y - m0.y) * sin(pm));
-  gMoonVis = smoothstep(0.45, 0.75, u);
-  gNight = smoothstep(0.55, 0.95, u);
-  gLightMix = smoothstep(0.52, 0.72, u);            // cloud key light: sun -> moon
-  gLightUp = todf(vec4(-0.8, 0.15, 0.0, -0.5));     // sunset light comes from below
-
-  //                day                      sunset                  dusk                    night
-  gZen    = tod(C_ZENITH,               vec3(0.46, 0.50, 0.70), vec3(0.20, 0.21, 0.41), vec3(0.118, 0.133, 0.275));
-  gMidSky = tod(C_CREAM,                vec3(0.90, 0.66, 0.64), vec3(0.40, 0.31, 0.50), vec3(0.17, 0.17, 0.34));
-  gHorSky = tod(C_PEACH,                vec3(0.99, 0.62, 0.38), vec3(0.66, 0.40, 0.47), vec3(0.227, 0.208, 0.40));
-  gGlowC  = tod(vec3(0.99, 0.80, 0.52), vec3(1.0, 0.52, 0.24),  vec3(0.92, 0.42, 0.30), vec3(0.50, 0.40, 0.48));
-  gCoreC  = tod(C_SUN,                  vec3(1.0, 0.84, 0.56),  vec3(1.0, 0.70, 0.45),  vec3(1.0, 0.70, 0.45));
-  gTwiC   = tod(C_PEACH,                vec3(1.0, 0.50, 0.26),  vec3(0.88, 0.40, 0.32), vec3(0.36, 0.26, 0.42));
-  gGlowAmt  = todf(vec4(0.70, 0.62, 0.40, 0.0));
-  gTwiAmt   = todf(vec4(0.0, 0.62, 0.75, 0.20));
-  gBloomAmt = todf(vec4(0.20, 0.22, 0.10, 0.0));
-  gCoreAmt  = todf(vec4(0.45, 0.40, 0.0, 0.0));
-
-  // flat gouache cloud tones: soft shadow, body, sunlit side
-  gCSh  = tod(vec3(0.76, 0.74, 0.84), vec3(0.70, 0.57, 0.66), vec3(0.38, 0.32, 0.50), vec3(0.15, 0.17, 0.27));
-  gCMid = tod(vec3(0.97, 0.935, 0.865), vec3(0.97, 0.72, 0.63), vec3(0.58, 0.43, 0.56), vec3(0.205, 0.235, 0.345));
-  gCLit = tod(vec3(1.0, 0.915, 0.70), vec3(1.0, 0.82, 0.55),  vec3(0.88, 0.58, 0.56), vec3(0.37, 0.43, 0.57));
-  gCloudK = todf(vec4(1.0, 1.0, 0.85, 0.5));
-  gRimW   = todf(vec4(0.03, 0.03, 0.022, 0.012));
-  gRim  = tod(vec3(1.0, 0.89, 0.60),  vec3(1.0, 0.70, 0.34),  vec3(1.0, 0.62, 0.48), vec3(0.80, 0.87, 1.0));
-  gRimAmt   = todf(vec4(0.55, 0.90, 0.60, 0.70));
-  gNearWarm = todf(vec4(0.8, 1.0, 0.6, 0.0));
-
-  gFarG  = vec3(0.84, 0.58, 0.54) * gW.y + vec3(0.42, 0.33, 0.48) * gW.z + vec3(0.19, 0.23, 0.33) * gW.w;
-  gNearG = vec3(0.24, 0.18, 0.24) * gW.y + vec3(0.13, 0.13, 0.19) * gW.z + vec3(0.065, 0.11, 0.125) * gW.w;
-  gChroma = todf(vec4(0.0, 0.40, 0.18, 0.14));
-}
-
-// re-light a day colour for sunset / dusk / night. d: 0 far .. 1 near
-vec3 grade(vec3 c, float d) {
-  float L = dot(c, vec3(0.30, 0.55, 0.15));
-  vec3 g = mix(gFarG, gNearG, d) * (0.62 + 0.9 * (L - 0.55));
-  return c * gW.x + g + (c - L) * gChroma;
-}
-
-// ------------------------------------------------------------------- clouds --
-// a cloud mass blob in edge-relative coords e = (distance from side edge, y).
-// returns (mass, base y)
-vec2 blob(vec2 e, vec2 ctr, vec2 rad, float base) {
-  vec2 q = (e - ctr) / rad;
-  float m = 1.0 - length(q);
-  m = min(m, (base - e.y) * 6.0);
-  return vec2(m, base);
-}
-vec2 pickMax(vec2 a, vec2 b) { return a.x > b.x ? a : b; }
-
-// where cumulus billows may live (x > 0 inside), and the local cloud base
-vec2 cloudMass(vec2 c) {
-  float ex = gHalfW - abs(c.x);
-  vec2 e = vec2(ex, c.y);
-  vec2 m;
-  float wv = smoothstep(0.2, 0.9, gHalfW);
-  if (c.x < 0.0) {
-    m = blob(e, vec2(0.0 + 0.10 * wv, 0.19), vec2(0.15 + 0.22 * wv, 0.20), 0.34);
-    m = pickMax(m, blob(e, vec2(0.18 + 0.2 * wv, gHor - 0.07), vec2(0.16 + 0.12 * wv, 0.065), gHor - 0.03));
-  } else {
-    m = blob(e, vec2(0.01 + 0.11 * wv, 0.14), vec2(0.14 + 0.20 * wv, 0.16), 0.27);
-    m = pickMax(m, blob(e, vec2(0.06 + 0.08 * wv, gHor - 0.09), vec2(0.18 + 0.16 * wv, 0.07), gHor - 0.04));
-  }
-  // keep a window around the (day) sun
-  float ds = length((c - gSunDay) * vec2(1.0, 1.3));
-  m.x = min(m.x, (ds - 0.15) * 4.0);
-  m.x += sin(c.x * 11.0 + sin(c.y * 9.0) * 1.7) * sin(c.y * 14.0 + c.x * 6.0 + 1.0) * 0.17;
-  return m;
-}
-// conservative test: could any billow reach p?
-bool nearCloud(vec2 p) {
-  const float G = 0.10;   // billow reach + warp + soft edge
-  float ex = gHalfW - abs(p.x);
-  vec2 e = vec2(ex, p.y);
-  float wv = smoothstep(0.2, 0.9, gHalfW);
-  float d;
-  if (p.x < 0.0) {
-    d = min(length((e - vec2(0.10 * wv, 0.19)) / vec2(0.15 + 0.22 * wv + G, 0.20 + G)),
-            length((e - vec2(0.18 + 0.2 * wv, gHor - 0.07)) / vec2(0.16 + 0.12 * wv + G, 0.065 + G)));
-  } else {
-    d = min(length((e - vec2(0.01 + 0.11 * wv, 0.14)) / vec2(0.14 + 0.20 * wv + G, 0.16 + G)),
-            length((e - vec2(0.06 + 0.08 * wv, gHor - 0.09)) / vec2(0.18 + 0.16 * wv + G, 0.07 + G)));
-  }
-  return d < 1.0;
-}
-
-// Coverage of the billow union (signed distance-like, > 0 inside) at p and at three
-// probes: toward the light (cov.y), away from it (cov.z) and below (cov.w). Only the
-// silhouette is used: the tones come from how close a point is to each edge, not
-// from any per-billow shading.
-void cloudCover(vec2 p, vec2 oL, vec2 oS, vec2 oD, float cs, float seed, float mmin,
-                vec3 M, float base, inout vec4 cov, inout vec4 fr) {
-  vec2 id = floor(p / cs);
-  float reach = 0.9 * cs + 0.05;
-  float reach2 = reach * reach;
-  float yb = base + 0.012;                      // flat-ish cloud base
-  for (int j = -1; j <= 1; j++) {
-    for (int i = -1; i <= 1; i++) {
-      vec2 cid = id + vec2(float(i), float(j));
-      vec3 h = h32(cid + seed);
-      vec2 c = (cid + 0.2 + 0.6 * h.xy) * cs;
-      vec2 dc = p - c;
-      if (dot(dc, dc) > reach2) continue;
-      float m = M.x + dot(M.yz, c - p);       // mass from the local linear model
-      if (m <= mmin) continue;
-      float r = cs * (0.62 + 0.28 * h.z) * (0.4 + 0.6 * smoothstep(0.0, 0.4, m));
-      // distant clouds near the horizon are flatter
-      vec2 S = vec2(1.0, 1.0 + 0.45 * smoothstep(gHor - 0.16, gHor - 0.05, c.y));
-      float e0 = r - length(dc * S);
-      // front-most billow here (upper billows are painted over lower ones): for caps
-      float prio = -c.y + 0.3 * cs * h.x;
-      if (seed < 1.0 && e0 > 0.0 && prio > fr.x) fr = vec4(prio, e0, dc / max(length(dc), 1e-4));
-      cov = max(cov, vec4(min(e0,                        yb - p.y),
-                          min(r - length((dc + oL) * S), yb - p.y - oL.y),
-                          min(r - length((dc + oS) * S), yb - p.y - oS.y),
-                          min(r - length((dc + oD) * S), yb - p.y - oD.y)));
-    }
-  }
-}
-
-vec4 clouds(vec2 p) {
-  if (!nearCloud(p)) return vec4(0.0);
-  // brushy, dabbed silhouette: warp the lookup a little
-  vec2 w = vec2(vn(p * 14.0), vn(p * 40.0 + 7.7)) - 0.5;
-  w = vec2(w.x + w.y * 0.45, w.y - w.x * 0.6);
-  vec2 pw = p + w * 0.022;
-
-  // key light: the sun (from below at sunset), then the moon
-  vec2 toSun = gSun - p;
-  float dSun = length(toSun);
-  vec2 LdS = normalize(toSun / max(dSun, 1e-3) + vec2(0.0, gLightUp));
-  vec2 toMoon = gMoon - p;
-  float dMoon = length(toMoon);
-  vec2 LdM = normalize(toMoon / max(dMoon, 1e-3) + vec2(0.0, -0.5));
-  vec2 Ld = mix(LdS, LdM, gLightMix);
-  Ld = Ld / max(length(Ld), 0.2);
-  float sunNear = exp(-dSun * 3.0) * gNearWarm;
-  float moonNear = exp(-dMoon * 3.5) * gMoonVis;
-  float glowNear = max(sunNear, moonNear);
-
-  // local linear model of the mass field (3 evaluations instead of one per billow)
-  vec2 m0 = cloudMass(pw);
-  float mx = cloudMass(pw + vec2(0.02, 0.0)).x;
-  float my = cloudMass(pw + vec2(0.0, 0.02)).x;
-  vec3 M = vec3(m0.x, (mx - m0.x) / 0.02, (my - m0.x) / 0.02);
-  float base = m0.y;
-  // the sunlit band is wider on clouds that face the light closely
-  vec2 oL = Ld * (0.026 + 0.022 * glowNear);
-  vec2 oS = -Ld * 0.042;
-  vec2 oD = vec2(0.0, 0.034);
-  vec4 cov = vec4(-1.0);
-  vec4 fr = vec4(-1e3, 1.0, 0.0, 0.0);
-  cloudCover(pw, oL, oS, oD, 0.075, 0.0, 0.0, M, base, cov, fr);
-  cloudCover(pw, oL, oS, oD, 0.036, 13.0, 0.10, M, base, cov, fr);
-
-  // brush marks: long dabs that break the edges and the borders between tones
-  float st  = brush(p, vec2(0.80, -0.60), 0.050, 0.016);
-  float st2 = brush(p + 1.7, vec2(0.96, 0.28), 0.035, 0.010);
-  float dab = vn(p * 75.0 + 3.1);
-  float edge = cov.x + (dab - 0.5) * 0.007 + (st - 0.5) * 0.005;
-
-  // wispy streaks trailing off the edges, mostly sideways and underneath
-  float wisp = smoothstep(0.70, 0.92, brush(p + 4.3, vec2(0.995, 0.10), 0.05, 0.008));
-  float wispA = wisp * smoothstep(-0.05, -0.004, cov.x) * (1.0 - smoothstep(-0.004, 0.004, cov.x)) * 0.45;
-  if (edge < -0.012 && wispA <= 0.0) return vec4(0.0);
-
-  // flat tonal steps, read off the silhouette
-  float lit = 1.0 - smoothstep(-0.004, 0.010, cov.y + (st2 - 0.5) * 0.012);   // near the lit edge
-  float shd = 1.0 - smoothstep(-0.004, 0.012, cov.z + (st - 0.5) * 0.014);    // near the far edge
-  float und = 1.0 - smoothstep(-0.004, 0.012, cov.w + (st2 - 0.5) * 0.012);   // near the underside
-  float far = smoothstep(gHor - 0.17, gHor - 0.05, p.y);
-  float shade = max(shd * 0.8, und * 0.55 * (1.0 - gW.y)) * (1.0 - lit * 0.7) * (1.0 - 0.4 * far);
-  // the outermost sliver facing the light catches a rim
-  float rimB = (1.0 - smoothstep(0.0, 0.005 + 0.007 * glowNear, cov.x)) * lit;
-  // flat lit caps where a billow's light-facing edge overlaps the one behind it
-  float cap = (1.0 - smoothstep(0.002, 0.013, fr.y + (st - 0.5) * 0.006)) * smoothstep(0.30, 0.65, dot(fr.zw, Ld))
-            * smoothstep(0.02, 0.04, cov.x) * (1.0 - far);
-
-  vec3 shadowC = mix(gCSh, gCMid, 0.30);                       // soft, never a dark underside
-  shadowC = mix(shadowC, shadowC * vec3(0.94, 0.98, 1.05), smoothstep(0.25, 0.02, p.y) * 0.6);
-  vec3 midC = mix(gCMid, gCMid * vec3(1.05, 1.0, 0.9), sunNear);
-  vec3 litC = mix(gCLit, gCLit * vec3(1.0, 0.93, 0.74), sunNear * 0.8);
-  cap *= 0.6 * (1.0 - 0.5 * gW.z - 0.6 * gW.w);
-  vec3 col = mix(midC, litC, max(lit, cap));
-  col = mix(col, shadowC, shade * (1.0 - cap));
-  col = mix(col, gRim, rimB * gRimAmt * (0.55 + 0.45 * glowNear));
-  // visible strokes inside the masses, and a little colour drift between dabs
-  float mott = vn(p * 28.0 + 1.3) * 0.6 + vn(p * 64.0 + 7.9) * 0.4;
-  col *= 1.0 + (bands(mott, st, 3.0, 0.22) - 0.5) * 0.05 + (st2 - 0.5) * 0.025;
-  col += (dab - 0.5) * vec3(0.014, 0.005, -0.012);
-  // distant clouds take on the colour of the haze
-  col = mix(col, mix(gMidSky, gHorSky, 0.45), far * 0.45);
-
-  // soft painted edge: lost on the lit side, a little firmer on the shadow side;
-  // thin parts stay translucent
-  float soft = mix(0.0025, 0.008, lit);
-  float a = smoothstep(-soft, soft, edge);
-  a *= 0.88 + 0.12 * smoothstep(0.0, 0.03, cov.x);
-  a *= 1.0 - 0.3 * exp(-dSun * 3.0) * gSunVis * (1.0 - smoothstep(0.0, 0.025, cov.x));
-  // wisps, painted in the cloud's light tone
-  vec3 wispC = mix(midC, litC, 0.5);
-  float aw = wispA * (1.0 - a);
-  // a faint glow just outside the edges that face the light
-  float halo = smoothstep(-0.03, 0.0, cov.x) * (1.0 - smoothstep(-0.003, 0.004, cov.x))
-             * (1.0 - smoothstep(-0.004, 0.012, cov.y)) * glowNear * 0.35 * gRimAmt;
-  float ah = halo * (1.0 - a - aw);
-  float at = a + aw + ah;
-  if (at <= 0.0) return vec4(0.0);
-  col = (col * a + wispC * aw + gRim * ah) / at;
-  return vec4(col, clamp(at, 0.0, 1.0));
-}
-
-// ---------------------------------------------------------------------- sky --
-vec3 sky(vec2 p) {
-  // broad gouache strokes (constant directions: a position-dependent rotation would swirl)
-  float n1 = brush(p, vec2(0.995, 0.0998), 0.11, 0.024);
-  float n2 = brush(p + vec2(0.0, 0.37), vec2(0.990, -0.141), 0.05, 0.011);
-  float t = clamp(p.y / gHor, 0.0, 1.0);
-  float tb = mix(t, bands(t, n1, 8.0, 0.25), 0.55);
-  vec3 c = mix(gZen, gMidSky, smoothstep(0.0, 0.72, tb));
-  c = mix(c, gHorSky, smoothstep(0.6, 1.05, tb) * 0.6);
-
-  // twilight band hugging the horizon around the setting point
-  float tw = exp(-max(gHor - p.y, 0.0) * 7.0) * exp(-abs(p.x - gSun.x) * 1.3);
-  c = mix(c, gTwiC, clamp(tw * gTwiAmt, 0.0, 1.0));
-
-  // the sun glow, painted as soft concentric tonal steps; it flattens as it sets
-  vec2 d = p - gSun;
-  float r = length(d * vec2(0.8 - 0.35 * gSet, 1.1 + 0.4 * gSet));
-  float g = exp(-r * 2.6);
-  float gb = mix(g, bands(g, n2, 7.0, 0.25), 0.55);
-  c = mix(c, gGlowC, gb * gGlowAmt);
-  float core = gSunVis;
-  if (core > 0.0) {
-    c = mix(c, mix(gCoreC, vec3(1.0, 0.93, 0.76), gW.x), smoothstep(0.3, 1.0, exp(-r * 4.5)) * 0.9 * core);
-    c = mix(c, gCoreC, smoothstep(0.45, 1.0, exp(-r * 7.0)) * core);
-    c = mix(c, mix(gCoreC, vec3(1.0), 0.6), smoothstep(0.045, 0.02, r) * core);
-    // soft rays
-    vec2 rd = d / max(length(d), 1e-4);
-    float rays = smoothstep(0.45, 0.8, vn(rd * 3.6 + 5.0)) * exp(-r * 1.8) * smoothstep(0.03, 0.14, r);
-    c = mix(c, mix(gCoreC, vec3(1.0, 0.96, 0.86), 0.5), rays * 0.30 * core * (1.0 - gSet * 0.5));
-  }
-
-  if (gNight > 0.0) {
-    // painterly stars: soft dabs, denser toward the top
-    float dens = mix(0.42, 0.04, smoothstep(0.0, gHor, p.y));
-    for (int l = 0; l < 2; l++) {
-      float cs = l == 0 ? 0.036 : 0.018;
-      vec2 id = floor(p / cs);
-      vec3 h = h32(id + 31.0 + float(l) * 17.0);
-      if (h.z < dens * (l == 0 ? 0.8 : 0.45)) {
-        vec2 ctr = (id + 0.3 + 0.4 * h.xy) * cs;
-        vec2 dd = (p - ctr) * vec2(1.0, 0.75 + 0.5 * h.y);
-        float sz = (l == 0 ? 0.0019 + 0.0034 * h.x * h.x * h.x : 0.0015);
-        float dl = length(dd);
-        float b = (0.35 + 0.65 * fract(h.x * 13.7 + h.y * 7.1)) * gNight * (l == 0 ? 1.0 : 0.6);
-        float s = smoothstep(sz, sz * 0.2, dl + (vn(dd * 900.0) - 0.5) * sz * 0.5)
-                + 0.3 * exp(-dl * dl / (sz * sz * 4.0));
-        vec3 sc = fract(h.y * 9.3) < 0.3 ? vec3(1.0, 0.92, 0.78) : vec3(0.88, 0.92, 1.0);
-        c = mix(c, sc, clamp(s * b, 0.0, 1.0));
-      }
-    }
-  }
-  if (gMoonVis > 0.0) {
-    // a soft painted moon with a halo
-    vec2 dm = p - gMoon;
-    float rm = length(dm);
-    c = mix(c, vec3(0.55, 0.60, 0.80), exp(-rm * 4.0) * 0.30 * gMoonVis);
-    c = mix(c, vec3(0.78, 0.82, 0.95), exp(-rm * 16.0) * 0.45 * gMoonVis);
-    const float MR = 0.03;
-    float edge = smoothstep(MR, MR - 0.004, rm + (vn(dm * 220.0) - 0.5) * 0.003);
-    float maria = bands(vn(dm * 55.0 + 3.0), vn(dm * 140.0), 3.0, 0.2);
-    vec3 mc = mix(vec3(0.99, 0.97, 0.89), vec3(0.84, 0.86, 0.86), maria * 0.6);
-    mc *= 1.0 - 0.12 * smoothstep(0.0, MR, length(dm + vec2(-0.01, -0.008)));
-    c = mix(c, mc, edge * gMoonVis);
-  }
-  c *= 1.0 + (n2 - 0.5) * 0.035;
-  c += (n1 - 0.5) * vec3(0.016, 0.004, -0.014);
-  return c;
-}
-
-// --------------------------------------------------------------------- land --
-// back-to-front "over" compositing with premultiplied alpha; w carries depth
-void over(inout vec4 acc, inout float accD, vec3 c, float m, float d) {
-  acc = vec4(c, 1.0) * m + acc * (1.0 - m);
-  accD = d * m + accD * (1.0 - m);
-}
-
-float rise(float x) { return smoothstep(0.08, gHalfW + 0.1, abs(x)); }
-
-// ridge line (y, measured downward) of a hill layer
-// prm: (offset below horizon, amplitude, frequency, phase); ra: rise toward the edges
-float ridge(float x, vec4 prm, float ra) {
-  return gHor + prm.x - prm.y * fbm1(x * prm.z + prm.w) - ra * rise(x);
-}
-
-// painted tree clumps sitting on a ridge line. returns (colour, coverage)
-vec4 clumps(vec2 p, float cs, float base, float sink, float dens, float haze, float seed) {
-  base += sink;
-  if (p.y > base + 0.008 || p.y < base - 2.0 * cs) return vec4(0.0);
-  float tid = floor(p.x / cs);
-  float leafy = vn(p * (9.0 / cs)) - 0.5;
-  float best = 0.0, bdl = 2.0, bcx = 0.0, bid = 0.0;
-  vec2 bdv = vec2(0.0);
-  for (int k = -1; k <= 1; k++) {
-    float cid = tid + float(k);
-    float hh = h11(cid * 1.37 + seed);
-    float cxx = (cid + 0.5 + (hh - 0.5) * 0.6) * cs;
-    float pres = smoothstep(0.55, 0.85, vn1(cid * 0.21 + seed) + dens + 0.45 * rise(cxx));
-    if (pres <= 0.0) continue;
-    float r = cs * (0.65 + 0.55 * h11(cid * 2.13 + seed)) * (0.55 + 0.45 * pres);
-    vec2 dv = (p - vec2(cxx, base - r * 0.55)) / r;
-    dv.y *= 1.12;
-    float dl = length(dv) + leafy * 0.28;
-    float inside = smoothstep(1.03, 0.95, dl);
-    if (inside > best) { best = inside; bdl = dl; bdv = dv; bcx = cxx; bid = cid; }
-  }
-  if (best <= 0.0) return vec4(0.0);
-  best *= smoothstep(base + 0.006, base - 0.002, p.y);
-  float sx = clamp((gSun.x - bcx) * 3.0, -0.8, 0.8);
-  vec3 L = normalize(vec3(sx, -0.75, 0.45));
-  float lit = clamp(dot(normalize(vec3(bdv, 0.55)), L) * 0.8 + 0.3, 0.0, 1.0);
-  float leaf = vn(p * (16.0 / cs) + bid);
-  float lb = mix(lit, bands(lit, leaf, 3.0, 0.14), 0.85);
-  vec3 c = mix(vec3(0.29, 0.34, 0.25), vec3(0.50, 0.55, 0.34), smoothstep(0.1, 0.55, lb));
-  c = mix(c, vec3(0.74, 0.72, 0.46), smoothstep(0.6, 0.95, lb));
-  // warm rim on the sun side
-  c = mix(c, vec3(0.86, 0.80, 0.55), smoothstep(0.82, 0.98, bdl) * step(0.0, sx * bdv.x - bdv.y * 0.3) * 0.6);
-  c = mix(c, mix(C_FAR, C_CREAM, 0.35), haze);
-  return vec4(c, best);
-}
-
-// returns colour (already re-lit for the time of day) and coverage
-vec4 land(vec2 p) {
-  float x = p.x;
-  const vec4 PA = vec4(-0.006, 0.016, 6.0, 20.0);
-  const vec4 PB = vec4(0.016, 0.024, 4.2, 11.0);
-  const vec4 PM = vec4(0.056, 0.030, 2.8, 2.0);
-  const vec4 PG = vec4(0.112, 0.018, 1.6, 4.0);
-  float raM = x < 0.0 ? 0.090 : 0.075;
-  float yA = ridge(x, PA, 0.022);
-  if (p.y < yA - 0.07) return vec4(0.0);
-  float yB = ridge(x, PB, 0.040);
-  float yM = ridge(x, PM, raM);
-  float yG = ridge(x, PG, 0.070);
-
-  float sunPull = exp(-abs(x - gSunDay.x) * 2.5);
-  vec3 haze = mix(C_CREAM, vec3(0.98, 0.90, 0.74), sunPull);
-  float sb = brush(p, vec2(0.981, 0.196), 0.05, 0.007);
-  float sb2 = brush(p, vec2(0.970, -0.243), 0.03, 0.005);
-  float lsx = sign(gSun.x - x + 1e-4);
-
-  vec4 acc = vec4(0.0);
-  float accD = 0.0;
-  if (p.y < yG + 0.004) {
-  if (p.y < yM + 0.004) {
-  // far range A: barely there
-  over(acc, accD, mix(mix(C_FAR, haze, 0.55), vec3(0.74, 0.77, 0.76), 0.25),
-       smoothstep(-0.0015, 0.0015, p.y - yA + (sb - 0.5) * 0.003), 0.0);
-
-  // far range B: hazy sage, lit tops, fading into valley haze
-  {
-    float m = smoothstep(-0.0015, 0.0015, p.y - yB + (sb2 - 0.5) * 0.003);
-    float lit = clamp(0.5 + (fbm1(x * 9.0 + 3.0) - 0.5) * 1.6, 0.0, 1.0);
-    vec3 c = mix(C_FAR * 0.95, mix(C_FAR, C_CREAM, 0.45), bands(lit, sb, 3.0, 0.2));
-    c = mix(c, haze, 0.25 + 0.3 * smoothstep(0.0, 0.03, p.y - yB));
-    over(acc, accD, c, m, 0.22);
-  }
-  // small far trees on ridge B
-  {
-    vec4 t = clumps(p, 0.011, yB, 0.004, -0.05, 0.55, 7.0);
-    over(acc, accD, t.rgb, t.a, 0.28);
-  }
-  }
-  // mid hills: olive-sage with sunlit slopes and strokes along the slope
-  if (p.y > yM - 0.003) {
-    float m = smoothstep(-0.0015, 0.0015, p.y - yM + (sb - 0.5) * 0.003);
-    float sl = (ridge(x + 0.010, PM, raM) - yM) / 0.010;
-    float st = vn(vec2(x / 0.035, (p.y - yM) / 0.006));     // strokes parallel to the ridge
-    float roll = vn(vec2(x * 7.0, (p.y - yM) * 14.0) + 3.0);
-    float lit = clamp(0.45 + sl * lsx * 1.2 + (roll - 0.5) * 0.5, 0.0, 1.0);
-    float lb = mix(lit, bands(lit, st, 3.0, 0.25), 0.6);
-    vec3 c = mix(vec3(0.50, 0.56, 0.44), C_MID, smoothstep(0.0, 0.5, lb));
-    c = mix(c, vec3(0.76, 0.75, 0.51), smoothstep(0.5, 1.0, lb));
-    c = mix(c, vec3(0.88, 0.83, 0.62), smoothstep(0.010, 0.0, p.y - yM) * 0.55);   // lit ridge
-    c = mix(c, haze, 0.18 + 0.45 * smoothstep(0.004, 0.06, p.y - yM));        // valley mist
-    c *= 1.0 + (st - 0.5) * 0.06;
-    over(acc, accD, c, m, 0.5);
-  }
-  // tree clumps on the mid hills
-  {
-    vec4 t = clumps(p, 0.017, yM, 0.010, -0.12, 0.30, 3.0);
-    over(acc, accD, t.rgb, t.a, 0.58);
-  }
-  }
-  // near tree clumps behind the meadow edge
-  {
-    vec4 t = clumps(p, 0.030, yG, 0.006, 0.0, 0.0, 1.0);
-    over(acc, accD, t.rgb, t.a, 0.9);
-  }
-
-  // meadow
-  float z = clamp((p.y - yG) / max(gRoll - yG, 0.02), 0.0, 1.0);
-  if (p.y > yG - 0.003) {
-    float gm = smoothstep(-0.0015, 0.0015, p.y - yG + (sb - 0.5) * 0.003);
-    // perspective rows: row height and cell width both grow with distance below y0,
-    // so cells stay roughly square on screen
-    const float A = 0.16;
-    float lv = log(max(p.y - (gHor - 0.02), 0.01)) / A;
-    float lp = vn(vec2(x * 4.0, p.y * 13.0) + 5.0);
-    vec3 gc = mix(vec3(0.88, 0.83, 0.58), C_MEADOW1, smoothstep(0.0, 0.35, z));
-    gc = mix(gc, C_MEADOW2, smoothstep(0.4, 1.0, z) * 0.6);
-    // grass flicks: short near-vertical strokes, one set per perspective row
-    float rv = lv * 2.0;
-    float ir = floor(rv);
-    float fr = rv - ir;
-    float uu = x / (A * exp((ir + 0.5) * 0.5 * A) * 0.5);
-    float g1 = vn(vec2(uu * 4.0 + fr * 1.2 + ir * 7.1, fr * 0.7 + ir * 3.3));
-    float g2 = vn(vec2(uu * 9.0 - fr * 0.8 + ir * 1.9, fr * 1.3 + ir * 5.7));
-    float shade = bands(clamp(lp + (g1 - 0.5) * 0.3, 0.0, 1.0), g2, 3.0, 0.15);
-    gc = mix(gc * vec3(0.84, 0.88, 0.80), gc, smoothstep(0.66, 0.42, shade));     // shadow patches
-    gc = mix(gc, vec3(0.95, 0.86, 0.55), smoothstep(0.40, 0.16, shade) * 0.5);   // sun patches
-    gc = mix(gc, vec3(0.95, 0.89, 0.66), sunPull * (1.0 - z) * 0.35);
-    gc *= 0.90 + 0.16 * mix(g1, g2, 0.45);
-    gc = mix(gc, vec3(0.90, 0.85, 0.62), smoothstep(0.012, 0.0, p.y - yG) * 0.35);
-    float dM = 0.75 + 0.25 * z;
-    over(acc, accD, gc, gm, dM);
-
-    // flowers: dabs in perspective cells, gathered into drifts
-    float drift = vn(vec2(x * 6.0, p.y * 11.0) + 11.0);
-    float prob = smoothstep(0.40, 0.62, drift + z * 0.15) * 0.8 + 0.05;
-    for (int l = 0; l < 2; l++) {
-      float fl = float(l);
-      float sc = 1.0 + fl * 0.8;
-      float vv = lv * sc + fl * 0.61;
-      float iv = floor(vv);
-      float cw = A * exp((iv + 0.5 - fl * 0.61) / sc * A) / sc;  // cell width on screen
-      float fu = x / cw + h11(iv + fl * 17.0) * 9.0;
-      vec2 id = vec2(floor(fu), iv);
-      vec2 f = vec2(fu, vv) - id;
-      vec3 h = h32(id + 41.0 * fl);
-      if (h.z > prob) continue;
-      vec2 ctr = 0.3 + 0.4 * h.xy;
-      float rr = 0.16 + 0.13 * h.y;
-      vec2 dd = (f - ctr) * vec2(1.0, 1.25);
-      float wob = (vn(f * 5.0 + id * 1.7) - 0.5) * 0.55;
-      float fm = smoothstep(1.05, 0.85, length(dd) / rr + wob) * gm * smoothstep(0.0, 0.12, z);
-      float sh = smoothstep(1.1, 0.6, length(dd - vec2(0.03, rr * 0.6)) / rr) * gm * 0.4;
-      acc.rgb *= 1.0 - sh * (1.0 - fm) * vec3(0.30, 0.25, 0.42);
-      float pick = fract(h.x * 7.31 + h.y * 3.17);
-      vec3 fc = pick < 0.5 ? C_YELLOW : (pick < 0.8 ? C_ORANGE : C_WHITE);
-      fc *= 0.85 + 0.2 * smoothstep(0.4, -0.5, dd.y / rr);
-      fc = mix(fc, haze, (1.0 - z) * 0.3);
-      over(acc, accD, fc, fm, dM);
-    }
-  }
-
-  // morning mist lying on the meadow, thickest at the bottom
-  float mb = brush(p, vec2(1.0, 0.0), 0.10, 0.012);
-  float mist = smoothstep(gRoll - 0.065, gRoll - 0.002, p.y) * (0.72 + 0.38 * mb);
-  mist = max(mist, exp(-pow((p.y - yG - 0.012) / 0.014, 2.0)) * 0.30 * smoothstep(-0.002, 0.002, p.y - yG) * (0.6 + 0.6 * mb));
-  mist = clamp(mist, 0.0, 0.92);
-  acc.rgb = mix(acc.rgb, C_MIST * acc.a, mist);
-
-  vec3 col = acc.rgb / max(acc.a, 1e-4);
-  float dep = accD / max(acc.a, 1e-4);
-  col = grade(col, mix(dep, 0.45, mist * 0.6));
-
-  if (gNight > 0.0 && p.y > yG) {
-    // a few warm fireflies drifting over the meadow
-    const float FC = 0.045;
-    vec2 id = floor(p / FC);
-    vec3 h = h32(id + 77.0);
-    if (h.z < 0.13) {
-      vec2 dd = p - (id + 0.3 + 0.4 * h.xy) * FC;
-      float d2 = dot(dd, dd);
-      float glow = exp(-d2 / 0.0000045) + 0.35 * exp(-d2 / 0.00003);
-      col += vec3(1.0, 0.80, 0.40) * glow * gNight * (0.6 + 0.4 * h.x) * (1.0 - mist * 0.7);
-    }
-  }
-  return vec4(col, acc.a);
-}
-
-// --------------------------------------------------------------- composite --
-vec3 paintSample(vec2 px, vec2 res) {
-  vec2 p = vec2((px.x - 0.5 * res.x) / res.y, px.y / res.y);
-  if (p.y > gRoll + 0.004) {
-    // hidden under the typewriter roller: just let the mist continue, cheaply
-    float mb = vn(vec2(p.x * 10.0, p.y * 80.0));
-    return grade(mix(C_MIST, C_MEADOW1, 0.10 + 0.10 * mb), 0.5);
-  }
-  vec3 col = vec3(0.0);
-  if (p.y < gHor + 0.002) {
-    col = sky(p);
-    if (p.y < gHor + 0.02) {
-      vec4 c = clouds(p);
-      col = mix(col, c.rgb, c.a);
-    }
-  }
-  if (p.y > gHor - 0.12) {
-    vec4 l = land(p);
-    col = mix(col, l.rgb, l.a);
-  }
-  // atmospheric bloom: sun (spreading along the horizon as it sets), then the moon
-  vec2 d = p - gSun;
-  float r = length(d * vec2(0.7 - 0.3 * gSet, 1.1 + 0.6 * gSet));
-  col = mix(col, gGlowC, exp(-r * 2.2) * gBloomAmt);
-  col = mix(col, gCoreC, exp(-r * 6.5) * gCoreAmt);
-  if (gMoonVis > 0.0) col = mix(col, vec3(0.70, 0.76, 0.92), exp(-length(p - gMoon) * 9.0) * 0.18 * gMoonVis);
-  return clamp(col, 0.0, 1.0);
-}
-
-// paper / pigment grain, applied once per pixel after supersampling
-vec3 paperGrain(vec3 col, vec2 px, vec2 res) {
-  vec2 p = px / res.y;
-  float gr = vn(p * 620.0) * 0.6 + vn(p * 210.0 + 5.0) * 0.4;
-  return col * (0.976 + 0.04 * gr);
-}
-
-vec3 painting(vec2 px, vec2 res) {
-  setupScene(res);
-#if SSAA
-  // 4x rotated-grid supersampling
-  vec3 c = paintSample(px + vec2( 0.125,  0.375), res);
-#if SSAA_ADAPTIVE
-  // quads whose first sample is already smooth skip the other three
-  // (needs painting() to be called in uniform control flow, as from main())
-  vec3 dc = abs(dFdx(c)) + abs(dFdy(c));
-  if (max(dc.r, max(dc.g, dc.b)) > SSAA_THRESHOLD) {
-#endif
-    c += paintSample(px + vec2(-0.375,  0.125), res);
-    c += paintSample(px + vec2(-0.125, -0.375), res);
-    c += paintSample(px + vec2( 0.375, -0.125), res);
-    c *= 0.25;
-#if SSAA_ADAPTIVE
-  }
-#endif
-#else
-  vec3 c = paintSample(px, res);
-#endif
-  return paperGrain(c, px, res);
-}
-`;
-const FULL_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
-// The view is painted in three layers, each into its own target: the plate (sky, sun, hills, meadow), the clouds and the
-// near flowers. SSAA (a define) takes four rotated-grid samples where the picture has edges, or one for the quick pass.
-// The cloud layer is painted wider than the screen (uPadX each side) so it can drift.
-const PAINT_SHIM = PAINT_GLSL.includes("paintingLayer") ? "" : `
-uniform float uLayer;
-vec4 paintingLayer(vec2 px, vec2 res) { return uLayer < 0.5 ? vec4(painting(px, res), 1.0) : vec4(0.0); }`;
-const PAINT_FS = `
-uniform vec2 uRes; uniform float uPadX;
-varying vec2 vUv;
-${PAINT_GLSL}
-${PAINT_SHIM}
-void main() { gl_FragColor = paintingLayer(vec2(vUv.x * (uRes.x + 2.0 * uPadX) - uPadX, (1.0 - vUv.y) * uRes.y), uRes); }`;
-// The live view, every frame: the clouds billow and drift like a slow fluid, wind ribbons stream across, the near flowers
-// sway in gusts, pollen floats in the sun; at night stars twinkle and fireflies wander. Then the machine's enamel body.
-const VIEW_FS = `
-uniform sampler2D uPlate, uClouds, uFlora;
-uniform vec2 uRes; uniform float uBodyY, uRollerY, uNight, uLamp, uTime, uPad;
-varying vec2 vUv;
-float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
-vec2 h22(vec2 p) { float n = h21(p); return vec2(n, h21(p + n * 17.0)); }
-float vn(vec2 p) {
-  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
-}
-float fbm(vec2 p) { return 0.5 * vn(p) + 0.3 * vn(p * 2.03 + 3.1) + 0.2 * vn(p * 4.01 + 7.7); }
-// drifting specks: one per cell at most, moving with the wind; returns brightness
-float specks(vec2 q, float cell, vec2 wind, float t, float size, float density, float blink) {
-  vec2 g = (q - wind * t) / cell, id = floor(g), f = fract(g);
-  vec2 r = h22(id);
-  if (r.x > density) return 0.0;
-  vec2 c = 0.2 + 0.6 * h22(id + 3.7) + 0.18 * vec2(sin(t * (0.6 + r.y) + r.x * 40.0), cos(t * (0.5 + r.x) + r.y * 30.0));
-  float d = length(f - c) * cell;
-  float tw = mix(1.0, 0.5 + 0.5 * sin(t * (1.5 + 2.0 * r.y) + r.x * 60.0), blink);
-  return exp(-d * d / (size * size)) * tw;
-}
-void main() {
-  vec2 px = vec2(vUv.x, 1.0 - vUv.y) * uRes;
-  float H = uRes.y, aspect = uRes.x / H, t = uTime;
-  vec2 q = vec2(px.x / H, px.y / H);
-  float roller = uRollerY / H, horizon = roller - 0.22;
-  vec3 col = texture2D(uPlate, vUv).rgb;
-
-  // Clouds: a slow fluid billow (curl of two noise fields) and a long, gentle drift.
-  vec2 w = vec2(fbm(q * 2.4 + vec2(t * 0.030, 1.7)), fbm(q * 2.4 + vec2(5.2, -t * 0.026))) - 0.5;
-  w += 0.5 * (vec2(fbm(q * 5.1 - vec2(t * 0.05, 0.0)), fbm(q * 5.1 + vec2(0.0, t * 0.045) + 9.0)) - 0.5);
-  float drift = uPad * 0.85 * sin(t * 0.021 + 1.3);
-  vec2 cuv = vec2(vUv.x + drift + w.x * 0.012 / aspect, vUv.y + w.y * 0.010);
-  cuv.x = (cuv.x + uPad) / (1.0 + 2.0 * uPad);
-  vec4 cl = texture2D(uClouds, cuv);
-  col = col * (1.0 - cl.a) + cl.rgb;
-
-  // Wind ribbons: thin streams of light that run across the sky and the meadow.
-  vec3 ribbonCol = mix(vec3(1.0, 0.96, 0.86), vec3(0.72, 0.80, 1.0), uNight);
-  for (int i = 0; i < 3; i++) {
-    float fi = float(i);
-    float base = horizon - 0.16 + fi * 0.13;
-    float y = base + 0.035 * sin(q.x * 1.6 + t * 0.21 + fi * 2.1) + 0.018 * sin(q.x * 3.7 - t * 0.33 + fi * 1.3)
-            + 0.02 * (fbm(vec2(q.x * 0.9 + fi * 4.0, t * 0.05)) - 0.5);
-    float d = abs(q.y - y), width = 0.0035 + 0.0025 * sin(q.x * 2.3 + fi);
-    float strand = smoothstep(width * 2.6, 0.0, d);
-    float run = smoothstep(0.55, 0.95, sin(q.x * 1.2 - t * (0.42 + 0.07 * fi) + fi * 2.7));   // short bright runs travel along it
-    col = mix(col, ribbonCol, strand * run * (0.22 - 0.08 * uNight));
-  }
-
-  // The near flowers sway: a horizontal shear that grows with height above the roller, in rolling gusts.
-  float above = max(roller - q.y, 0.0);
-  float gust = 0.55 + 0.45 * sin(q.x * 2.2 - t * 0.9) * sin(t * 0.37 + q.x * 0.7);
-  float sway = (sin(t * 1.6 + q.x * 7.0) * 0.7 + sin(t * 2.7 + q.x * 13.0 + 1.3) * 0.3) * gust * 0.06 * above * smoothstep(0.0, 0.05, above);
-  vec4 fl = texture2D(uFlora, vUv + vec2(sway / aspect, 0.0));
-  col = col * (1.0 - fl.a) + fl.rgb;
-
-  // Pollen in the sunlight by day; at night, twinkling stars and wandering fireflies.
-  float day = 1.0 - smoothstep(0.35, 0.7, uNight), night = smoothstep(0.55, 0.95, uNight);
-  if (day > 0.0) {
-    float pollen = specks(q, 0.11, vec2(0.012, -0.006), t, 0.0028, 0.35, 0.3) * smoothstep(roller, horizon - 0.25, q.y);
-    col = mix(col, vec3(1.0, 0.95, 0.78), pollen * 0.55 * day);
-  }
-  if (night > 0.0) {
-    float stars = specks(q * vec2(1.0, 1.0) + 13.0, 0.045, vec2(0.0), t, 0.0016, 0.55, 0.9) * smoothstep(horizon - 0.02, 0.0, q.y);
-    stars *= 1.0 - cl.a;
-    col += vec3(0.95, 0.93, 1.0) * stars * 0.85 * night;
-    float flies = specks(q + 5.0, 0.07, vec2(0.006, 0.002), t * 0.8, 0.0035, 0.3, 1.0) * smoothstep(horizon - 0.04, horizon + 0.04, q.y) * smoothstep(roller + 0.01, roller - 0.03, q.y);
-    col += vec3(1.0, 0.82, 0.38) * flies * 1.4 * night;
-  }
-
-  float below = px.y - uBodyY;
-  if (below > 0.0) {
-    float b = clamp(below / max(uRes.y - uBodyY, 1.0), 0.0, 1.0);
-    vec3 body = mix(mix(vec3(0.62, 0.67, 0.52), vec3(0.47, 0.53, 0.40), b), mix(vec3(0.13, 0.16, 0.19), vec3(0.07, 0.08, 0.11), b), uNight);
-    body *= 1.0 - 0.35 * exp(-below / (0.035 * H));                     // shade tucked under the roller
-    body += (h21(floor(px)) - 0.5) * 0.012;                              // a fine enamel grain against banding
-    body = mix(body, body * vec3(1.9, 1.45, 1.0), uLamp * 0.6 * exp(-pow((px.x / uRes.x - 0.5) * 2.2, 2.0)) * exp(-below / (0.25 * H)));
-    col = body;
-  }
-  gl_FragColor = vec4(col, 1.0);
-}`;
-
-// The view has its own canvas and clock behind the machine, so it can move every frame while the heavy page
-// shader only draws when something on the machine changes.
-function initView() {
-  const canvas = document.createElement("canvas");
-  let r;
-  try { r = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" }); } catch (e) { return null; }
-  stage.insertBefore(canvas, stage.firstChild);
-  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new THREE.PlaneGeometry(2, 2);
-  const U = { uRes: { value: new THREE.Vector2(1, 1) }, uPadX: { value: 0 }, uRollerY: { value: 0 }, uNight: { value: 0 }, uLayer: { value: 0 } };
-  const mats = [0, 1].map(ssaa => new THREE.ShaderMaterial({ vertexShader: FULL_VS, fragmentShader: PAINT_FS, uniforms: U, defines: { SSAA: ssaa },
-    depthTest: false, depthWrite: false, extensions: { derivatives: true } }));
-  const paintMesh = new THREE.Mesh(quad, mats[1]), paintScene = new THREE.Scene(); paintScene.add(paintMesh);
-  const V = { uPlate: { value: null }, uClouds: { value: null }, uFlora: { value: null }, uRes: { value: new THREE.Vector2(1, 1) },
-              uBodyY: { value: 0 }, uRollerY: { value: 0 }, uNight: { value: 0 }, uLamp: { value: 0 }, uTime: { value: 0 }, uPad: { value: 0.06 } };
-  const viewMat = new THREE.ShaderMaterial({ vertexShader: FULL_VS, fragmentShader: VIEW_FS, uniforms: V, depthTest: false, depthWrite: false });
-  const viewScene = new THREE.Scene(); viewScene.add(new THREE.Mesh(quad, viewMat));
-  const opts = { depthBuffer: false, stencilBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
-  const layers = n => Array.from({ length: n }, () => new THREE.WebGLRenderTarget(1, 1, opts));
-  const hi = layers(3), lo = layers(3);
-  let painted = "", size = "";
-  function paint(set, w, h, rollerY, night, ssaa) {
-    paintMesh.material = mats[ssaa];
-    set.forEach((rt, i) => {
-      const pad = i === 1 ? Math.round(w * V.uPad.value) : 0;
-      rt.setSize(w + pad * 2, h);
-      U.uRes.value.set(w, h); U.uPadX.value = pad; U.uRollerY.value = rollerY * h / H; U.uNight.value = night; U.uLayer.value = i;
-      r.setRenderTarget(rt); r.render(paintScene, cam);
-    });
-    r.setRenderTarget(null);
-    [V.uPlate.value, V.uClouds.value, V.uFlora.value] = set.map(rt => rt.texture);
-  }
-  function draw(seconds) {
-    if (size !== `${W}x${H}@${DPR}`) { size = `${W}x${H}@${DPR}`; r.setPixelRatio(DPR); r.setSize(W, H, false); }
-    const d = camDist(), kPl = d / (d + PLATEN_R + BOW + 0.6);
-    const rollerTop = H / 2 - (BEND_Y + PLATEN_R - (spring.sy.to - H / 2) / zoom) * zoom * kPl;   // where the roller will settle
-    const bodyY = H / 2 - (BEND_Y - (spring.sy.v - H / 2) / zoom) * zoom * kPl;
-    const night = spring.lamp.v, fading = Math.abs(night - spring.lamp.to) > 0.002 || Math.abs(spring.lamp.vel) > 0.002;
-    const want = `${size}:${Math.round(rollerTop)}:${night.toFixed(3)}`;
-    if (fading) { paint(lo, W, H, rollerTop, night, 0); painted = ""; }
-    else if (painted !== want) { paint(hi, Math.round(W * DPR), Math.round(H * DPR), rollerTop, night, 1); painted = want; }
-    V.uRes.value.set(W * DPR, H * DPR); V.uBodyY.value = bodyY * DPR; V.uRollerY.value = rollerTop * DPR;
-    V.uNight.value = night; V.uLamp.value = night; V.uTime.value = seconds;
-    r.render(viewScene, cam);
-  }
-  return { draw };
-}
-let VIEW = null, viewLive = false;
-function startView() { if (VIEW && !viewLive) { viewLive = true; requestAnimationFrame(viewLoop); } }
-function viewLoop(t) {
-  VIEW.draw(reduceMotion ? 0 : t / 1000);
-  if (reduceMotion || document.hidden) { viewLive = false; return; }   // a still picture: redrawn only when the machine moves
-  requestAnimationFrame(viewLoop);
-}
-
 async function initGL() {
   try {
     THREE = await import("./vendor/three/three.module.min.js");
   } catch (e) { return null; }
-  VIEW = initView();
   const glCanvas = document.createElement("canvas");
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, alpha: true, powerPreference: "high-performance" });
   } catch (e) { return null; }
   stage.appendChild(glCanvas);
-  renderer.setClearColor(0x000000, 0);                                // clear: the view shows through
+  renderer.setClearColor(0x161514, 1);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 1, 10000);
 
   // A soft studio for the metal to reflect: light above, dark below.
   const envCanvas = document.createElement("canvas"); envCanvas.width = 256; envCanvas.height = 128;
   const eg = envCanvas.getContext("2d"), envGrad = eg.createLinearGradient(0, 0, 0, 128);
-  envGrad.addColorStop(0, "#DCE4E4"); envGrad.addColorStop(0.42, "#F3E2C0"); envGrad.addColorStop(0.5, "#FFF6E2"); envGrad.addColorStop(0.58, "#9AA77F"); envGrad.addColorStop(1, "#3E4630");
+  envGrad.addColorStop(0, "#f4f1ea"); envGrad.addColorStop(0.42, "#b9b6b0"); envGrad.addColorStop(0.5, "#ffffff"); envGrad.addColorStop(0.58, "#6d6a66"); envGrad.addColorStop(1, "#141312");
   eg.fillStyle = envGrad; eg.fillRect(0, 0, 256, 128);
   const envTex = new THREE.CanvasTexture(envCanvas); envTex.mapping = THREE.EquirectangularReflectionMapping; envTex.colorSpace = THREE.SRGBColorSpace;
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -2109,68 +1295,17 @@ async function initGL() {
   paper.frustumCulled = false; scene.add(paper);
 
   // The rod, its end caps, the type guide with its three lamps, and the pointer.
-  // Brass, warm like the sunrise, brushed along its length.
-  const brushed = (() => {
-    const c = document.createElement("canvas"); c.width = 512; c.height = 8;
-    const g = c.getContext("2d"), r = splitmix(0xB2A55n);
-    for (let x = 0; x < 512; x++) { const v = 120 + r.unit() * 90; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(x, 0, 1, 8); }
-    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
-  })();
-  const steel = new THREE.MeshStandardMaterial({ color: 0xC9A464, metalness: 0.95, roughness: 0.3, roughnessMap: brushed });
-  const black = new THREE.MeshStandardMaterial({ color: 0x7F8B60, metalness: 0.1, roughness: 0.42 });      // sage enamel, like the hills
+  const steel = new THREE.MeshStandardMaterial({ color: 0x5d6168, metalness: 0.92, roughness: 0.3 });
+  const black = new THREE.MeshStandardMaterial({ color: 0x141414, metalness: 0.4, roughness: 0.5 });
   const rod = new THREE.Mesh(new THREE.CylinderGeometry(ROD_R, ROD_R, 1, 40, 1, true), steel);
   rod.rotation.z = Math.PI / 2; scene.add(rod);
   const capGeo = new THREE.CylinderGeometry(ROD_R + 2.2, ROD_R + 2.2, 15, 40);
   const capL = new THREE.Mesh(capGeo, black), capR = new THREE.Mesh(capGeo, black);
   capL.rotation.z = capR.rotation.z = Math.PI / 2; scene.add(capL, capR);
   // The platen: the rubber roller the sheet wraps round, just behind the rod.
-  // The platen's rubber, as worn as a real one: fine grain, polished bands where it turns, and the faint dents
-  // that years of type slugs leave, pressed in as letters. One canvas serves as colour and bump.
-  function platenSkin() {
-    const w = 1024, h = 512, c = document.createElement("canvas"); c.width = w; c.height = h;
-    const g = c.getContext("2d"), r = splitmix(0x91A7E2n), img = g.createImageData(w, h), d = img.data;
-    for (let i = 0; i < d.length; i += 4) { const v = 214 + (r.unit() - 0.5) * 30; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
-    g.putImageData(img, 0, 0);
-    for (let k = 0; k < 22; k++) { g.fillStyle = `rgba(255,255,255,${0.05 + r.unit() * 0.1})`; g.fillRect(0, r.unit() * h, w, 1 + r.unit() * 12); }
-    g.font = `15px "Courier Prime"`; g.textAlign = "center"; g.textBaseline = "middle";
-    const marks = "abcdefghijklmnopqrstuvwxyzETAOINSHRDLU.,;:'-";
-    for (let k = 0; k < 1400; k++) {
-      g.save(); g.translate(r.unit() * w, r.unit() * h); g.rotate(-Math.PI / 2 + r.sym(0.05));
-      g.fillStyle = `rgba(30,30,30,${0.08 + r.unit() * 0.3})`; g.fillText(marks[Math.floor(r.unit() * marks.length)], 0, 0); g.restore();
-    }
-    for (let k = 0; k < 160; k++) {                                    // pits and nicks
-      g.fillStyle = `rgba(20,20,20,${0.15 + r.unit() * 0.35})`; g.beginPath();
-      g.ellipse(r.unit() * w, r.unit() * h, 0.8 + r.unit() * 2.4, 0.6 + r.unit() * 1.4, r.unit() * 3, 0, Math.PI * 2); g.fill();
-    }
-    const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    return tex;
-  }
-  const skin = platenSkin();
-  const rubber = new THREE.MeshStandardMaterial({ color: 0x5B6644, roughness: 0.7, metalness: 0, map: skin, bumpMap: skin, bumpScale: 1.6 });
-  const platen = new THREE.Mesh(new THREE.CylinderGeometry(PLATEN_R - 0.6, PLATEN_R - 0.6, 1, 96, 1, true), rubber);
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x121110, roughness: 0.74, metalness: 0 });
+  const platen = new THREE.Mesh(new THREE.CylinderGeometry(PLATEN_R - 0.6, PLATEN_R - 0.6, 1, 72, 1, true), rubber);
   platen.rotation.z = Math.PI / 2; scene.add(platen);
-  // Platen knobs at both ends: knurled cream bakelite on a brass hub, with a smooth chamfered face.
-  function knurled(radius, len, ridges) {
-    const geo = new THREE.CylinderGeometry(radius, radius, len, ridges * 8, 1, false), pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), z = pos.getZ(i), rr = Math.hypot(x, z);
-      if (rr < radius * 0.9) continue;
-      const ridge = Math.pow(0.5 + 0.5 * Math.cos(Math.atan2(z, x) * ridges), 2.5) * 1.4, k = (radius - 0.7 + ridge) / rr;
-      pos.setX(i, x * k); pos.setZ(i, z * k);
-    }
-    geo.computeVertexNormals(); return geo;
-  }
-  const bakelite = new THREE.MeshPhysicalMaterial({ color: 0xEDE6D6, roughness: 0.4, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.3 });
-  const gripGeo = knurled(PLATEN_R + 4, 26, 44);
-  const faceGeo = new THREE.CylinderGeometry(PLATEN_R + 1.2, PLATEN_R + 3.4, 6, 96);
-  const hubGeo = new THREE.CylinderGeometry(PLATEN_R + 0.9, PLATEN_R + 0.9, 4, 96);
-  const knobs = [-1, 1].map(side => {
-    const k = new THREE.Group(), grip = new THREE.Mesh(gripGeo, bakelite), face = new THREE.Mesh(faceGeo, bakelite), hub = new THREE.Mesh(hubGeo, steel);
-    grip.position.y = side * 15; face.position.y = side * 31; face.rotation.x = side < 0 ? Math.PI : 0; hub.position.y = 0;
-    k.add(grip, face, hub); k.rotation.z = -Math.PI / 2; scene.add(k); k.hub = hub; return k;
-  });
-
-
   const guide = new THREE.Group(); scene.add(guide);
   // Glossy ivory enamel.
   const pillMat = new THREE.MeshPhysicalMaterial({ color: 0xEFEAE0, roughness: 0.34, metalness: 0, clearcoat: 0.85, clearcoatRoughness: 0.22 });
@@ -2326,15 +1461,12 @@ async function initGL() {
     uniforms.uCaretX.value = cx;
     // Rod across the whole window, capped at both ends; parts in front are placed so they line up with the type.
     const zRod = 14, kRod = (dist - zRod) / dist, half = W / 2 / zoom * kRod;
-    if (Math.abs(half - rodSpan) > 0.5) { rodSpan = half; rod.scale.set(1, half * 2 + 30, 1); brushed.repeat.set(3, 1); }
+    if (Math.abs(half - rodSpan) > 0.5) { rodSpan = half; rod.scale.set(1, half * 2 + 30, 1); }
     const rodY = camY + (ROD_Y - camY) * kRod;
     rod.position.set(0, rodY, zRod); capL.position.set(-half + 7, rodY, zRod); capR.position.set(half - 7, rodY, zRod);
     const zGuide = zRod + ROD_R * 0.4, kGuide = (dist - zGuide) / (dist - paperDepth(cx));
     guide.position.set(cx * kGuide, camY + (ROD_Y - camY) * kGuide, zGuide);
-    // The platen sits behind the sheet's bowed edges and ends in a knob just inside each side of the window.
-    const zP = -(PLATEN_R + BOW + 0.6), platenHalf = W / 2 / zoom * (dist - zP) / dist - 36;
-    platen.scale.set(1, platenHalf * 2, 1); platen.position.set(0, BEND_Y, zP); skin.repeat.set(1, platenHalf * 2 / 300);
-    knobs[0].position.set(-platenHalf, BEND_Y, zP); knobs[1].position.set(platenHalf, BEND_Y, zP);
+    platen.scale.set(1, half * 2 + 60, 1); platen.position.set(0, BEND_Y, -(PLATEN_R + BOW + 0.6));   // behind the sheet's bowed edges too
     // The lamps glow faintly like radium paint, and flare when their key is struck.
     lamps.forEach((l, i) => {
       const g = lampGlow[i];
@@ -2349,6 +1481,7 @@ async function initGL() {
     lampLight.position.set(cx * kGuide, camY + (-6 - camY) * kGuide, 40); lampLight.intensity = 2.6 * lamp;
     steel.envMapIntensity = 1 - lamp * 0.75; black.envMapIntensity = 1 - lamp * 0.75; pillMat.envMapIntensity = 0.6 * (1 - lamp * 0.7);
     rubber.envMapIntensity = 0.22 * (1 - lamp * 0.8);    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
+    renderer.setClearColor(0x161514, 1);
     renderer.render(scene, camera);
   }
   // Downloads go through the same shader, flat and evenly lit, a band at a time.
@@ -2364,7 +1497,7 @@ async function initGL() {
     const cam = new THREE.OrthographicCamera(-PAPER_W / 2, PAPER_W / 2, 0, -1, -200, 200);
     const keep = {}; for (const k of ["uFlat", "uInk", "uInkTop", "uInkH", "uWinTop", "uWinH", "uTopY", "uPaperH", "uLamp", "uPxPerPt"]) keep[k] = uniforms[k].value;
     const keepView = uniforms.uView.value.clone();
-    const hidden = [rod, capL, capR, guide, platen, ...knobs];
+    const hidden = [rod, capL, capR, guide, platen];
     hidden.forEach(o => { o.visible = false; });
     renderer.setPixelRatio(1); renderer.setClearColor(0x000000, 0);
     try {
@@ -2388,7 +1521,7 @@ async function initGL() {
       uniforms.uView.value.copy(keepView);
       hidden.forEach(o => { o.visible = true; });
       etex.dispose();
-      renderer.setPixelRatio(DPR); renderer.setSize(W, H, false); renderer.setClearColor(0x000000, 0);
+      renderer.setPixelRatio(DPR); renderer.setSize(W, H, false); renderer.setClearColor(0x161514, 1);
       renderGL();
     }
     return out;
@@ -2404,10 +1537,7 @@ function resize2D() {
 }
 function draw2D() {
   const g = ctx2d, sy = spring.sy.v;
-  g.setTransform(DPR, 0, 0, DPR, 0, 0);
-  const n = spring.lamp.v, rodLine = sy - ROD_Y * zoom, skyG = g.createLinearGradient(0, 0, 0, rodLine);
-  skyG.addColorStop(0, n > 0.5 ? "#1E2246" : "#BFCBCB"); skyG.addColorStop(0.7, n > 0.5 ? "#3A3566" : "#F2E4C6"); skyG.addColorStop(1, n > 0.5 ? "#1D2A2A" : "#A9B07A");
-  g.fillStyle = skyG; g.fillRect(0, 0, W, rodLine); g.fillStyle = n > 0.5 ? "#151A1E" : "#8F9A72"; g.fillRect(0, rodLine, W, H - rodLine);
+  g.setTransform(DPR, 0, 0, DPR, 0, 0); g.fillStyle = "#161514"; g.fillRect(0, 0, W, H);
   g.save(); g.translate(W / 2, sy); g.scale(zoom, zoom);
   const ox = -PAPER_W / 2, oy = -topMargin(sheet) - spring.y.v, viewTop = -sy / zoom;
   g.translate(0, viewTop);
@@ -2425,9 +1555,9 @@ function draw2D() {
   g.restore();
   const z = zoom, ry = sy - ROD_Y * z, cx = W / 2 + (spring.x.v - PAPER_W / 2) * z;
   g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(0, ry + ROD_R * z, W, 4 * z);
-  g.fillStyle = "#C9A464"; g.fillRect(0, ry - ROD_R * z, W, ROD_R * 2 * z);
-  g.fillStyle = "#EBD49A"; g.fillRect(0, ry - ROD_R * z, W, 2 * z);
-  g.fillStyle = "#7F8B60"; g.fillRect(0, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z); g.fillRect(W - 14 * z, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z);
+  g.fillStyle = "#5d6168"; g.fillRect(0, ry - ROD_R * z, W, ROD_R * 2 * z);
+  g.fillStyle = "#9a9da3"; g.fillRect(0, ry - ROD_R * z, W, 2 * z);
+  g.fillStyle = "#141414"; g.fillRect(0, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z); g.fillRect(W - 14 * z, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z);
   g.fillStyle = "#F1EDE4"; g.beginPath(); g.roundRect(cx - PILL_LEN / 2 * z, ry - PILL_R * z, PILL_LEN * z, PILL_R * 2 * z, PILL_R * z); g.fill();
   ["#3dff7a", "#ffc23d", "#ff4438"].forEach((c, i) => {
     const x = cx + (i - 1) * 10.5 * z, glow = lampGlow[i];
@@ -3192,7 +2322,7 @@ window.addEventListener("resize", () => {
   else placePanel(current);
 });
 if (window.visualViewport) visualViewport.addEventListener("resize", () => { retarget(); if (typing) keys.style.top = Math.round(spring.sy.to) + "px"; kick(); });
-document.addEventListener("visibilitychange", () => { if (document.hidden) persist(true); else startView(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) persist(true); });
 window.addEventListener("storage", e => {
   if (e.key !== "tw.sheets") return;
   sheets = mergeSheets(readSheets(), sheets).filter(s => s.id !== sheet.id);

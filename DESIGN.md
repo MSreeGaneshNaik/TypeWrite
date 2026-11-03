@@ -1,6 +1,6 @@
 ---
 name: TypeWrite
-description: A typewriter in the browser, drawn in three.js. Aged paper, cloth-ribbon ink, a brass rod and a sliding type guide, in a live painted meadow.
+description: A typewriter in the browser, drawn in three.js. Aged paper, cloth-ribbon ink, a steel rod and a sliding type guide.
 colors:
   desk: "#161514"
   surface: "#F2F1EE"
@@ -26,9 +26,7 @@ colors:
   ink-blue: "#28346E"
   ink-worn: "#5A4636"
   guide-cream: "#F1EDE4"
-  rod-brass: "#C9A464"
-  enamel-sage: "#7F8B60"
-  platen-olive: "#4A5236"
+  rod-steel: "#5D6168"
   platen-rubber: "#121110"
   lamp-key: "#3DFF7A"
   lamp-space: "#FFC23D"
@@ -113,7 +111,7 @@ components:
 
 ## Overview
 
-**Creative North Star: "A machine in a painted meadow"**
+**Creative North Star: "A machine on a dark desk"**
 
 The window is a desk at night. One sheet sits in the machine, lit softly from above. The type guide slides along a steel rod as you type, and the paper rolls up a line at every Return. Everything else is quiet chrome that floats over the page: a back arrow, a character count and a share button at the top, and one light pill dock at the bottom. The look follows the Platen reel that inspired it, made in our own code. The paper is never a flat colour: it has fibres, specks, foxing and browned edges, and every letter shows the ribbon's weave and the dent its key left.
 
@@ -129,8 +127,7 @@ The paper takes 80% of the window's width at every size. Type scales with it, so
 
 The desk is a neutral near-black. The chrome is a near-neutral light grey that never reads as yellow, because the paper owns the cream.
 
-- **The view** (procedural, not tokens): a gouache sunrise behind the machine (sky #BFCBCB to #F2E4C6, sage hills, a flower meadow, warm mist). With the desk lamp on, it turns through sunset to a moonlit night (#1E2246 to #3A3566). The HUD is dark (#3A3733) on the day sky and light (#D6D2C9) at night.
-- **The machine:** a brass rod (#C9A464), sage enamel end caps and body (#7F8B60 / #9EAB85), and an olive rubber platen (#4A5236).
+- **Desk** (#161514): behind the page; also the HUD's light colour (#D6D2C9) when an icon sits over it.
 - **Surface / Raised / Rule** (#F2F1EE / #E6E4DF / #DAD7D0): the dock, panels and toasts; the hover and selected fill; dividers and outlines.
 - **Text tiers** (#23211E / #55504A / #6A645B): primary, secondary and meta. Each is at least 4.5:1 on the surface.
 - **Primary** (#23211E): the one filled action in a panel ("Picture of the sheet"), switches when on, the pressed desk lamp, and the toast.
@@ -161,8 +158,7 @@ Depth is physical, not decorative:
 - **The page:** a perspective camera (30° FOV, positioned so the plane z = 0 maps exactly at the zoom). The sheet bows 9 pt and its top edge curls 44 pt away, which gives the reel's arched top edge and darker sides.
 - **Platen:** 24 pt below the baseline the sheet wraps over a rubber roller (radius 44 pt). Lines that roll over it darken as they turn away from the light.
 - **Light:** a soft key light from above-left on the bump of the paper tooth and the key dents, plus a screen vignette at the top and sides. The rod and guide cast a band of shade on the page.
-- **Desk lamp:** ambient and key light drop to about 10%, and a warm point at the guide lights a pool and an upward beam. The view goes to night with it.
-- **The view:** its own canvas behind the machine. It is painted in three layers (plate, clouds, near flowers) at native resolution with adaptive 4× supersampling, and repainted only when the size, the roller or the night changes. Every frame, a cheap pass moves it: the clouds billow and drift, wind ribbons run across, the near flowers sway in gusts, pollen floats by day, and stars twinkle and fireflies wander at night. Reduced motion holds it still.
+- **Desk lamp:** ambient and key light drop to about 10%, and a warm point at the guide lights a pool and an upward beam.
 - **Floating chrome:** the dock, popovers, sheets and toast carry a real shadow because they float. Nothing resting has one.
 
 ## Shapes
@@ -198,7 +194,7 @@ Depth is physical, not decorative:
 
 - **Do** keep the paper at 80% of the window width and the strike line just above the dock.
 - **Do** seed anything that appears on the page from the sheet's seed and the character's id.
-- **Do** keep chrome light and floating. The HUD follows day and night.
+- **Do** keep chrome light and floating. Its colour follows what is behind it.
 - **Don't** use the typewriter faces for controls. They are for the page and the wordmark.
 - **Don't** give resting elements shadows or gradients. Depth belongs to the page, the rod and the guide.
 - **Don't** add yellow cream to the chrome. The paper owns it.
