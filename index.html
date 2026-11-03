@@ -18,6 +18,8 @@
   /* Typewriter faces: for the page and the wordmark only. The controls use the system face. */
   @font-face { font-family: "Courier Prime"; src: url("TypeWrite/Resources/Fonts/CourierPrime-Regular.ttf") format("truetype"); font-display: block; }
   @font-face { font-family: "Special Elite"; src: url("TypeWrite/Resources/Fonts/SpecialElite-Regular.ttf") format("truetype"); font-display: block; }
+  @font-face { font-family: "Cutive Mono"; src: url("TypeWrite/Resources/Fonts/CutiveMono-Regular.ttf") format("truetype"); font-display: block; }
+  @font-face { font-family: "Lekton"; src: url("TypeWrite/Resources/Fonts/Lekton-Regular.ttf") format("truetype"); font-display: block; }
 
   :root {
     --desk: #161514;
@@ -69,7 +71,7 @@
   .hud-side.on-desk { color: var(--hud-on-desk); }
   .hud > * { pointer-events: auto; }
   .hud-right { display: flex; align-items: center; gap: 2px; }
-  .hud-btn { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 999px; background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer;
+  .hud-btn { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 999px; background: transparent; display: grid; place-items: center; cursor: pointer;
              transition: background-color .15s, transform .14s var(--ease-out); }
   .hud-btn:hover { background: rgba(35, 33, 30, .07); }
   .on-desk .hud-btn:hover, .hud-btn.on-desk:hover { background: rgba(255, 255, 255, .09); }
@@ -82,6 +84,16 @@
   .dock { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; gap: 2px; padding: 6px;
           border-radius: 999px; background: var(--surface); border: 1px solid rgba(35, 33, 30, .08); box-shadow: 0 6px 18px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .08);
           transform: translateX(-50%); transition: transform .42s var(--ease-out), opacity .3s, visibility 0s; }
+  .editbar { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 6; display: flex; align-items: center; gap: 2px; padding: 6px;
+             border-radius: 999px; background: var(--surface); border: 1px solid rgba(35, 33, 30, .08); box-shadow: 0 6px 18px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .08);
+             transform: translate(-50%, 14px); opacity: 0; visibility: hidden; transition: transform .3s var(--ease-out), opacity .2s, visibility 0s .3s; }
+  body.selecting .editbar { transform: translateX(-50%); opacity: 1; visibility: visible; transition: transform .42s var(--ease-out), opacity .2s, visibility 0s; }
+  body.selecting .dock { opacity: 0; visibility: hidden; }
+  .edit-btn { height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--text); font: 500 14px/20px var(--ui);
+              white-space: nowrap; cursor: pointer; transition: background-color .15s; }
+  .edit-btn:hover:not(:disabled) { background: var(--raised); }
+  .edit-btn:disabled { color: var(--faint); opacity: .55; cursor: default; }
+  #stage { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   body.typing .dock { transform: translate(-50%, calc(100% + 40px)); opacity: 0; visibility: hidden;
                       transition: transform .28s cubic-bezier(.4, 0, .7, .2), opacity .2s, visibility 0s .28s; }
   .dock-btn { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 999px; background: transparent; color: var(--text); display: grid; place-items: center; cursor: pointer;
@@ -160,6 +172,18 @@
   .row-btn { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-top: 14px; border: 1px solid var(--rule); border-radius: var(--r-tile);
              background: transparent; color: var(--text); text-align: left; cursor: pointer; transition: background-color .15s; }
   .row-btn:hover { background: var(--raised); }
+  .row-btn.danger { color: var(--alarm); }
+  .row-btn.danger.armed { background: var(--alarm); border-color: var(--alarm); color: #fff; }
+  .row-btn.danger.armed small { color: rgba(255, 255, 255, .86); }
+  .field { width: 100%; height: 44px; box-sizing: border-box; padding: 0 14px; border: 1px solid var(--rule); border-radius: var(--r-tile); background: #FBFAF8;
+           color: var(--text); font: 15px/20px var(--ui); outline: none; }
+  .field:focus-visible { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(160, 106, 28, .18); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; border-radius: 999px; background: var(--raised); }
+  .seg-btn { height: 36px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 500 14px/20px var(--ui);
+             display: grid; place-items: center; cursor: pointer; transition: background-color .15s, color .15s; }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn[aria-checked="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+  .seg-btn .i { width: 20px; height: 20px; }
   .row-btn span { flex: 1; }
   .row-btn small { display: block; font-size: 12px; line-height: 16px; color: var(--faint); }
 
@@ -238,6 +262,9 @@
   <button class="dock-btn" id="faceKey" type="button" aria-label="Typeface" title="Typeface" aria-haspopup="dialog" aria-controls="facePanel" aria-expanded="false">
     <svg class="i" viewBox="0 0 24 24"><path d="M7 9V5.5A1.5 1.5 0 0 1 8.5 4h7A1.5 1.5 0 0 1 17 5.5V9"/><rect x="3" y="9" width="18" height="11" rx="2"/><path d="M7 13h.01M10 13h.01M14 13h.01M17 13h.01M8 16.5h8"/></svg>
   </button>
+  <button class="dock-btn" id="titleKey" type="button" aria-label="Title" title="Title" aria-haspopup="dialog" aria-controls="titlePanel" aria-expanded="false">
+    <svg class="i" viewBox="0 0 24 24"><path d="M5 6.5V5h14v1.5M12 5v10M9.5 15h5M6 19h12"/></svg>
+  </button>
   <button class="dock-btn" id="flowerKey" type="button" aria-label="Pressed flower" title="Pressed flower" aria-haspopup="dialog" aria-controls="flowerPanel" aria-expanded="false">
     <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="9" r="2"/><path d="M12 7a2.5 2.5 0 1 1 2.4-3.2A2.5 2.5 0 1 1 15.6 9a2.5 2.5 0 1 1-1.4 3.9A2.5 2.5 0 1 1 9.8 12.9 2.5 2.5 0 1 1 8.4 9a2.5 2.5 0 1 1 1.2-5.2A2.5 2.5 0 0 1 12 7"/><path d="M12 13v8M12 18c-2.5 0-4-1.5-4.5-3.5 2 0 3.5.8 4.5 2.4"/></svg>
   </button>
@@ -256,6 +283,15 @@
     <svg class="i off" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>
   </button>
 </nav>
+
+<div class="editbar" id="editBar" role="toolbar" aria-label="Edit the selection">
+  <button class="edit-btn" type="button" data-cmd="copy" data-needs-sel>Copy</button>
+  <button class="edit-btn" type="button" data-cmd="cut" data-needs-sel>Cut</button>
+  <button class="edit-btn" type="button" data-cmd="delete" data-needs-sel>Delete</button>
+  <span class="dock-rule" aria-hidden="true"></span>
+  <button class="edit-btn" type="button" data-cmd="paste">Paste</button>
+  <button class="edit-btn" type="button" data-cmd="all">Select all</button>
+</div>
 
 <div class="scrim" id="scrim"></div>
 
@@ -279,6 +315,7 @@
     <p class="label">Your sheets</p>
     <ul class="sheet-list" id="sheetList"></ul>
     <p class="note">Sheets are kept in this browser only. Download any you want to keep.</p>
+    <p class="note">Typewriter sounds: Erik Pålsson, <a href="http://www.soundsofchanges.eu/sound/underwood-315-portable-typewriter" target="_blank" rel="noopener">Sounds of Changes</a> (CC BY 4.0), with CC0 recordings by knufds and others.</p>
     <div class="group">
       <p class="label">Machine</p>
       <label class="switch-row"><span>Key sounds</span><input class="switch" type="checkbox" role="switch" id="soundToggle" checked></label>
@@ -288,6 +325,10 @@
       <svg class="i" viewBox="0 0 24 24"><rect x="7" y="2.75" width="10" height="18.5" rx="2.5"/><path d="M11 18h2"/></svg>
       <span>TypeWrite for Mac and iPhone<small>The native app, installed with one line</small></span>
       <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <button class="row-btn danger" id="resetRow" type="button">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg>
+      <span><span id="resetLabel">Reset everything</span><small id="resetHint">Erases every sheet and setting in this browser</small></span>
     </button>
   </div>
 </section>
@@ -323,7 +364,18 @@
 
 <section class="panel" id="facePanel" role="dialog" aria-labelledby="faceTitle" tabindex="-1" hidden>
   <div class="drag"><div class="grabber"></div><header><h2 id="faceTitle">Typeface</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
-  <div class="panel-body"><div class="tiles two" id="faceTiles" role="radiogroup" aria-labelledby="faceTitle"></div></div>
+  <div class="panel-body"><div class="tiles two" id="faceTiles" role="radiogroup" aria-labelledby="faceTitle"></div>
+    <div class="group"><p class="label" id="sizeLabel">Size</p><div class="seg" id="sizeSeg" role="radiogroup" aria-labelledby="sizeLabel"></div></div>
+    <div class="group"><p class="label" id="alignLabel">Align</p><div class="seg" id="alignSeg" role="radiogroup" aria-labelledby="alignLabel"></div></div>
+    <p class="note">Bigger type fits fewer letters on a line, like a wider pitch.</p></div>
+</section>
+
+<section class="panel" id="titlePanel" role="dialog" aria-labelledby="titleTitle" tabindex="-1" hidden>
+  <div class="drag"><div class="grabber"></div><header><h2 id="titleTitle">Title</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
+  <div class="panel-body">
+    <input class="field" id="titleField" type="text" maxlength="48" placeholder="A title for this sheet" autocomplete="off" aria-labelledby="titleTitle">
+    <p class="note">Typed at the top of the sheet, centred and a size up. It also names the sheet and its downloads.</p>
+  </div>
 </section>
 
 <section class="panel" id="flowerPanel" role="dialog" aria-labelledby="flowerTitle" tabindex="-1" hidden>
@@ -355,8 +407,22 @@
    ============================================================ */
 
 // ---------- Metrics (the fixed pitch of the machine) ----------
-const COLS = 30, ADV = 10.2, LH = 26, SIDE = 26, TOP = 70, TOP_FLOWER = 138, BELL_COL = COLS - 6, MAX_CHARS = 40000;
-const PAPER_W = COLS * ADV + SIDE * 2;
+const SIDE = 26, TOP = 70, TOP_FLOWER = 138, MAX_CHARS = 40000, PAPER_W = 358;
+// Type size is the machine's pitch: the line stays 306 pt wide, so bigger type means fewer, wider columns.
+const SIZES = [{ id: "small", name: "Small", cols: 36 }, { id: "medium", name: "Medium", cols: 30 }, { id: "large", name: "Large", cols: 24 }];
+const ALIGNS = [{ id: "left", name: "Left", k: 0 }, { id: "center", name: "Centre", k: 0.5 }, { id: "right", name: "Right", k: 1 }];
+let COLS = 30, ADV = 10.2, LH = 26, BELL_COL = 24, TYPE_K = 1;
+function useMetrics(s) {
+  if (!s.size) s.size = "medium";
+  if (!s.align) s.align = "left";
+  COLS = (SIZES.find(z => z.id === s.size) || SIZES[1]).cols;
+  ADV = (PAPER_W - SIDE * 2) / COLS; TYPE_K = ADV / 10.2; LH = 26 * TYPE_K; BELL_COL = COLS - 6;
+}
+// How far a line moves right, in columns, to sit left, centred or right.
+function lineShift(s, line) {
+  const k = (ALIGNS.find(a => a.id === s.align) || ALIGNS[0]).k;
+  return k ? (COLS - Math.min(line.glyphs.length, COLS)) * k : 0;
+}
 
 // grain: mottling and tooth; age: yellowing, browned edges and foxing; laid: laid and chain lines; fibre: visible fibres.
 const PAPERS = [
@@ -374,6 +440,8 @@ const INKS = [
 const FACES = [
   { id: "courier", name: "Pica", family: "Courier Prime", size: 17 },
   { id: "elite", name: "Elite", family: "Special Elite", size: 15.5 },
+  { id: "office", name: "Office", family: "Cutive Mono", size: 16.8 },
+  { id: "gothic", name: "Gothic", family: "Lekton", size: 16.5 },
 ];
 const FLOWERS = [
   { id: "none", name: "None" }, { id: "marigold", name: "Marigold" }, { id: "rose", name: "Rose" },
@@ -420,58 +488,91 @@ function sanitize(input) {
   return out;
 }
 function emptyLayout() { return { lines: [{ glyphs: [], ret: false }], line: 0, col: 0 }; }
-// Appends one character and reports how the carriage moved.
-function strikeInto(L, ch, index) {
+// Appends one character and reports how the carriage moved. index: its place in the text; id: the seed of its ink.
+function strikeInto(L, ch, index, id = index) {
   if (ch === "\n") {
-    L.lines[L.lines.length - 1].ret = true;
+    L.lines[L.lines.length - 1].ret = true; L.lines[L.lines.length - 1].end = index;   // end: the character a line break used up
     L.lines.push({ glyphs: [], ret: false }); L.line = L.lines.length - 1; L.col = 0;
     return "returned";
   }
   let move = "advanced";
   if (L.col >= COLS) {
-    if (ch === " ") { L.lines.push({ glyphs: [], ret: false }); L.line = L.lines.length - 1; L.col = 0; return "wrappedOnSpace"; }
+    if (ch === " ") { L.lines[L.lines.length - 1].end = index; L.lines.push({ glyphs: [], ret: false }); L.line = L.lines.length - 1; L.col = 0; return "wrappedOnSpace"; }
     const g = L.lines[L.lines.length - 1].glyphs;
     let space = -1;
     for (let i = g.length - 1; i >= 0; i--) if (g[i].ch === " ") { space = i; break; }
     let carried = [];
     if (space >= 0 && space < g.length - 1) carried = g.splice(space + 1);
-    L.lines.push({ glyphs: carried.map((x, c) => ({ ch: x.ch, index: x.index, col: c })), ret: false });
+    L.lines.push({ glyphs: carried.map((x, c) => ({ ch: x.ch, index: x.index, id: x.id, col: c })), ret: false });
     L.line = L.lines.length - 1; L.col = carried.length;
     move = "wrapped";
   }
-  L.lines[L.lines.length - 1].glyphs.push({ ch, index, col: L.col });
+  L.lines[L.lines.length - 1].glyphs.push({ ch, index, id, col: L.col });
   L.col += 1;
   return move;
 }
-function layoutChars(chars) { const L = emptyLayout(); chars.forEach((c, i) => strikeInto(L, c, i)); return L; }
+function layoutChars(chars, ids) { const L = emptyLayout(); chars.forEach((c, i) => strikeInto(L, c, i, ids ? ids[i] : i)); return L; }
+// Ink ids are stored as runs of consecutive numbers, so a sheet typed straight through stores nothing extra.
+function packIds(ids) {
+  const out = [];
+  for (let i = 0; i < ids.length;) { let j = i + 1; while (j < ids.length && ids[j] === ids[j - 1] + 1) j++; out.push(ids[i], j - i); i = j; }
+  return out.length === 2 && out[0] === 0 ? undefined : out;
+}
+function unpackIds(p, n) {
+  if (!Array.isArray(p)) return null;
+  const ids = [];
+  for (let k = 0; k + 1 < p.length && ids.length <= n; k += 2) for (let m = 0; m < p[k + 1]; m++) ids.push(p[k] + m);
+  return ids.length === n ? ids : null;
+}
+// Line and column of the gap before character b (b = the text's length: the carriage's own place).
+function posIn(L, b, n) {
+  if (b >= n) return [L.line, L.col];
+  for (let li = 0; li < L.lines.length; li++) {
+    const g = L.lines[li].glyphs;
+    if (g.length && b >= g[0].index && b <= g[g.length - 1].index) return [li, g[b - g[0].index].col];
+    if (L.lines[li].end === b) return [li, g.length];
+  }
+  return [L.line, L.col];
+}
 
 class Typist {
-  constructor(text) { this.chars = graphemes(sanitize(text || "")).slice(0, MAX_CHARS); this.layout = layoutChars(this.chars); }
+  constructor(text, packed) {
+    this.chars = graphemes(sanitize(text || "")).slice(0, MAX_CHARS);
+    this.ids = unpackIds(packed, this.chars.length) || this.chars.map((_, i) => i);
+    this.next = this.ids.reduce((m, v) => Math.max(m, v), -1) + 1;
+    this.caret = this.chars.length;
+    this.layout = layoutChars(this.chars, this.ids); this.cp = null;
+  }
   get text() { return this.chars.join(""); }
+  caretPos() { return this.cp || (this.cp = posIn(this.layout, this.caret, this.chars.length)); }
+  setCaret(b) { this.caret = Math.max(0, Math.min(b, this.chars.length)); this.cp = null; }
+  relayout() { this.layout = layoutChars(this.chars, this.ids); this.cp = null; }
+  // Types at the caret. At the end of the text the layout just grows; in the middle the text reflows.
   type(input) {
     const clean = graphemes(sanitize(input));
     if (!clean.length) return [];
     if (this.chars.length >= MAX_CHARS) return ["jammed"];
-    const accepted = clean.slice(0, MAX_CHARS - this.chars.length);
-    if (accepted.length > 1) {
-      for (const c of accepted) { strikeInto(this.layout, c, this.chars.length); this.chars.push(c); }
-      return ["key"];
-    }
-    const c = accepted[0], before = { line: this.layout.line, col: this.layout.col };
-    const move = strikeInto(this.layout, c, this.chars.length);
-    this.chars.push(c);
-    const events = [];
-    if (move === "returned" || move === "wrappedOnSpace") events.push("return");
-    else if (move === "wrapped") events.push("return", "key");
-    else events.push(c === " " ? "space" : "key");
-    if (this.layout.line === before.line && before.col < BELL_COL && this.layout.col >= BELL_COL) events.push("bell");
+    const accepted = clean.slice(0, MAX_CHARS - this.chars.length), ids = accepted.map(() => this.next++);
+    const before = this.caretPos();
+    if (this.caret === this.chars.length) {
+      accepted.forEach((c, k) => { strikeInto(this.layout, c, this.chars.length, ids[k]); this.chars.push(c); this.ids.push(ids[k]); });
+    } else { this.chars.splice(this.caret, 0, ...accepted); this.ids.splice(this.caret, 0, ...ids); }
+    this.setCaret(this.caret + accepted.length);
+    if (this.caret < this.chars.length) this.relayout();
+    if (accepted.length > 1) return ["key"];
+    const c = accepted[0], now = this.caretPos(), wrapped = now[0] > before[0];
+    const events = c === "\n" || (wrapped && c === " ") ? ["return"] : wrapped ? ["return", "key"] : [c === " " ? "space" : "key"];
+    if (!wrapped && before[1] < BELL_COL && now[1] >= BELL_COL) events.push("bell");
     return events;
   }
-  backspace() {
-    if (!this.chars.length) return ["jammed"];
-    this.chars.pop(); this.layout = layoutChars(this.chars);
-    return ["backspace"];
+  remove(a, b) {
+    if (b <= a) return;
+    this.chars.splice(a, b - a); this.ids.splice(a, b - a);
+    this.setCaret(this.caret > b ? this.caret - (b - a) : Math.min(this.caret, a));
+    this.relayout();
   }
+  backspace() { if (!this.caret) return ["jammed"]; this.remove(this.caret - 1, this.caret); return ["backspace"]; }
+  forwardDelete() { if (this.caret >= this.chars.length) return ["jammed"]; this.remove(this.caret, this.caret + 1); return ["backspace"]; }
 }
 
 // ---------- Storage (sheets live in this browser) ----------
@@ -489,7 +590,8 @@ const newSeed = () => 1 + Math.floor(Math.random() * 2147483646);
 function newSheet() {
   const d = store.get("tw.defaults", {});
   return { id: "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: "", created: Date.now(), updated: Date.now(),
-           paper: d.paper || "cream", ink: d.ink || "black", face: d.face || "courier", flower: d.flower || "none", seed: newSeed() };
+           paper: d.paper || "cream", ink: d.ink || "black", face: d.face || "courier", flower: d.flower || "none",
+           size: d.size || "medium", align: d.align || "left", seed: newSeed() };
 }
 function readSheets() {
   const v = store.get("tw.sheets", []);
@@ -508,13 +610,14 @@ let sheets = readSheets();
 let sheet = sheets.find(s => s.id === store.get("tw.current", "")) || null;
 let fresh = false;
 if (!sheet) { sheet = newSheet(); fresh = true; }
-let typist = new Typist(sheet.text);
+useMetrics(sheet);
+let typist = new Typist(sheet.text, sheet.ids);
 let saveTimer = 0;
 function persist(now) {
   clearTimeout(saveTimer);
   const write = () => {
-    sheets = mergeSheets(readSheets(), sheets).filter(s => s.id !== sheet.id && s.text.trim());
-    if (sheet.text.trim()) sheets.unshift(sheet);
+    sheets = mergeSheets(readSheets(), sheets).filter(s => s.id !== sheet.id && filled(s));
+    if (filled(sheet)) sheets.unshift(sheet);
     store.set("tw.sheets", sheets); store.set("tw.current", sheet.id);
   };
   if (now) write(); else saveTimer = setTimeout(write, 400);
@@ -545,19 +648,26 @@ function play(name, volume = 1, rate = 1) {
   if (!soundOn || !audio.ctx || !audio.buffers[name]) return;
   const src = audio.ctx.createBufferSource();
   src.buffer = audio.buffers[name];
-  const jitter = name === "bell" ? 0.008 : 0.035;
+  const jitter = name === "bell" ? 0.008 : 0.02;   // the four strikes already differ; keep each typebar's ring in tune
   src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * jitter);
   if (volume === 1) src.connect(audio.gain);
   else { const v = audio.ctx.createGain(); v.gain.value = volume; src.connect(v); v.connect(audio.gain); }
   src.start();
 }
-// The click of the platen's line ratchet: a small, bright key sound.
-function ratchet() { play("key3", 0.32, 1.9); buzz(3); }
+// The click of the platen's line ratchet: the detent click at the head of the paper-feed recording.
+function ratchet() {
+  if (soundOn && audio.ctx && audio.buffers.feed) {
+    const src = audio.ctx.createBufferSource(); src.buffer = audio.buffers.feed;
+    src.playbackRate.value = 1 + (Math.random() * 2 - 1) * 0.04;
+    src.connect(audio.gain); src.start(0, 0, 0.05);
+  }
+  buzz(3);
+}
 function playKey() {
   const keys = ["key1", "key2", "key3", "key4"];
   let pick = keys[Math.floor(Math.random() * 4)];
   if (pick === audio.lastKey) pick = keys[(keys.indexOf(pick) + 1) % 4];
-  audio.lastKey = pick; play(pick);
+  audio.lastKey = pick; play(pick, 0.85 + Math.random() * 0.15);   // fingers never strike twice alike
 }
 function buzz(ms) { if (buzzOn && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 function feedback(events) {
@@ -718,7 +828,20 @@ function strikeFor(seed, index) {
   if (!s) { s = inkStrike(seed, index); strikeCache.set(key, s); if (strikeCache.size > 120000) strikeCache.clear(); }
   return s;
 }
-function topMargin(s) { return s.flower === "none" ? TOP : TOP_FLOWER; }
+const TITLE_GAP = 46;                               // a title takes about two lines above the first one
+const filled = s => !!(s.text.trim() || (s.title || "").trim());
+// With a pressed flower the title sits beside it, so the first line stays just under the flower.
+function topMargin(s) { return s.flower !== "none" ? TOP_FLOWER : TOP + ((s.title || "").trim() ? TITLE_GAP : 0); }
+// The title: a size up, centred in the space it has (the whole line, or beside the flower), shrinking to fit when long.
+// Seeded like the letters below it.
+function titleLayout(s, face) {
+  const chars = graphemes((s.title || "").trim());
+  if (!chars.length) return null;
+  const flower = s.flower !== "none", right = flower ? PAPER_W - 70 - 60 : PAPER_W - SIDE, width = right - SIDE;
+  const adv = Math.min(10.2 * 1.6, width / chars.length), x0 = SIDE + (width - adv * chars.length) / 2;
+  return { base: flower ? 66 + face.size * adv / 10.2 * 0.3 : TOP, fs: face.size * adv / 10.2, adv,
+           glyphs: chars.map((ch, i) => ({ ch, index: -1 - i, x: x0 + (i + 0.5) * adv })) };
+}
 // g: context already scaled to sheet points. view: visible height in sheet points.
 function drawSheet(g, s, L, ox, oy, paperH, viewW, viewH, shadow) {
   const paper = byId(PAPERS, s.paper), ink = byId(INKS, s.ink), face = byId(FACES, s.face);
@@ -744,19 +867,31 @@ function drawSheet(g, s, L, ox, oy, paperH, viewW, viewH, shadow) {
 
   const first = Math.max(0, Math.floor((-LH * 2 - (oy + topMargin(s))) / LH));
   const last = Math.min(L.lines.length - 1, Math.floor((viewH + LH * 2 - (oy + topMargin(s))) / LH));
-  g.font = `${face.size}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = ink.color;
+  g.font = `${face.size * TYPE_K}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = ink.color;
   const left = ox + SIDE;
   for (let li = first; li <= last; li++) {
-    const base = oy + topMargin(s) + li * LH;
+    const base = oy + topMargin(s) + li * LH, shift = lineShift(s, L.lines[li]);
     for (const gl of L.lines[li].glyphs) {
       if (gl.ch === " ") continue;
-      const k = strikeFor(s.seed, gl.index), cx = left + (gl.col + 0.5) * ADV;
+      const k = strikeFor(s.seed, gl.id), cx = left + (gl.col + 0.5 + shift) * ADV;
       g.save(); g.translate(cx + k.dx, base + k.dy); g.rotate(k.rot);
       g.globalAlpha = k.bleed; g.fillText(gl.ch, 0.45, 0.2);
       g.globalAlpha = k.opacity; g.fillText(gl.ch, 0, 0);
       g.restore();
     }
   }
+  const t = titleLayout(s, face);
+  if (t) {
+    g.font = `${t.fs}px "${face.family}"`;
+    for (const q of t.glyphs) {
+      if (q.ch === " ") continue;
+      const k = strikeFor(s.seed, q.index);
+      g.save(); g.translate(ox + q.x + k.dx, oy + t.base + k.dy); g.rotate(k.rot);
+      g.globalAlpha = k.bleed; g.fillText(q.ch, 0.45, 0.2); g.globalAlpha = k.opacity; g.fillText(q.ch, 0, 0);
+      g.restore();
+    }
+  }
+  g.globalAlpha = 1;
 }
 function sheetHeight(s, L) { return Math.max(topMargin(s) + L.lines.length * LH + 70, PAPER_W * 1.294); }
 
@@ -782,36 +917,42 @@ function glyphLook(seed, index, ch) {
 }
 const COUNTERS = "aeobdgpqABDOPQR04689&@";
 // Draws ink as data for the paper shader: alpha is the letter's shape, green is how hard it struck.
+const inkTone = v => `rgb(255,${Math.round(Math.max(0, Math.min(1, v)) * 255)},0)`;
+// One strike as data for the shader: alpha is the letter's shape, green is how hard it struck.
+function inkGlyph(g, seed, ch, index, cx, base, fs, adv) {
+  const k = glyphLook(seed, index, ch);
+  g.save(); g.translate(cx + k.dx, base + k.dy); g.rotate(k.rot);
+  if (k.ghost) { g.fillStyle = inkTone(k.strength * 0.32); g.fillText(ch, 0.7, -0.45); }
+  const ux = Math.cos(k.angle) * adv * 0.55, uy = Math.sin(k.angle) * adv * 0.55 - fs * 0.3;
+  const grad = g.createLinearGradient(-ux, -fs * 0.3 - uy, ux, -fs * 0.3 + uy);
+  grad.addColorStop(0, inkTone(k.strength * (1 - k.tilt)));
+  grad.addColorStop(1, inkTone(k.strength));
+  g.fillStyle = grad; g.fillText(ch, 0, 0);
+  if (k.clog && COUNTERS.includes(ch)) {
+    const upper = ch === ch.toUpperCase() && !"04689&".includes(ch);
+    g.fillStyle = inkTone(k.strength * 0.85); g.beginPath();
+    g.ellipse(0, -fs * (upper ? 0.42 : 0.24), fs * 0.13, fs * (upper ? 0.16 : 0.1), 0, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+}
 function drawInk(g, s, L, top, h) {
-  const face = byId(FACES, s.face), tm = topMargin(s);
+  const face = byId(FACES, s.face), tm = topMargin(s), fs = face.size * TYPE_K;
   const first = Math.max(0, Math.floor((top - tm - LH) / LH)), last = Math.min(L.lines.length - 1, Math.ceil((top + h - tm + LH) / LH));
-  g.font = `${face.size}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic";
-  const tone = v => `rgb(255,${Math.round(Math.max(0, Math.min(1, v)) * 255)},0)`;
+  g.font = `${fs}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic";
   for (let li = first; li <= last; li++) {
-    const base = tm + li * LH;
-    for (const gl of L.lines[li].glyphs) {
-      if (gl.ch === " ") continue;
-      const k = glyphLook(s.seed, gl.index, gl.ch), cx = SIDE + (gl.col + 0.5) * ADV;
-      g.save(); g.translate(cx + k.dx, base + k.dy); g.rotate(k.rot);
-      if (k.ghost) { g.fillStyle = tone(k.strength * 0.32); g.fillText(gl.ch, 0.7, -0.45); }
-      const ux = Math.cos(k.angle) * ADV * 0.55, uy = Math.sin(k.angle) * ADV * 0.55 - face.size * 0.3;
-      const grad = g.createLinearGradient(-ux, -face.size * 0.3 - uy, ux, -face.size * 0.3 + uy);
-      grad.addColorStop(0, tone(k.strength * (1 - k.tilt)));
-      grad.addColorStop(1, tone(k.strength));
-      g.fillStyle = grad; g.fillText(gl.ch, 0, 0);
-      if (k.clog && COUNTERS.includes(gl.ch)) {
-        const upper = gl.ch === gl.ch.toUpperCase() && !"04689&".includes(gl.ch);
-        g.fillStyle = tone(k.strength * 0.85); g.beginPath();
-        g.ellipse(0, -face.size * (upper ? 0.42 : 0.24), face.size * 0.13, face.size * (upper ? 0.16 : 0.1), 0, 0, Math.PI * 2); g.fill();
-      }
-      g.restore();
-    }
+    const base = tm + li * LH, shift = lineShift(s, L.lines[li]);
+    for (const gl of L.lines[li].glyphs) if (gl.ch !== " ") inkGlyph(g, s.seed, gl.ch, gl.id, SIDE + (gl.col + 0.5 + shift) * ADV, base, fs, ADV);
+  }
+  const t = titleLayout(s, face);
+  if (t && t.base + 20 > top && t.base - 40 < top + h) {
+    g.font = `${t.fs}px "${face.family}"`;
+    for (const q of t.glyphs) if (q.ch !== " ") inkGlyph(g, s.seed, q.ch, q.index, q.x, t.base, t.fs, t.adv);
   }
 }
 
 // ---------- The machine ----------
 const $ = sel => document.querySelector(sel);
-const stage = $("#stage"), keys = $("#keys"), hud = $("#hud"), ghost = $("#ghost");
+const stage = $("#stage"), keys = $("#keys"), hud = $("#hud"), ghost = $("#ghost"), titleField = $("#titleField");
 const hudSides = [...document.querySelectorAll(".hud-side")];
 // The first-line prompt is part of the page: tapping it starts the machine like tapping the paper.
 ghost.addEventListener("pointerdown", e => {
@@ -850,17 +991,20 @@ function toScreen(x, y) {
 }
 function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
 function setFeel(names, resp, damp) { for (const n of names) { spring[n].resp = resp; spring[n].damp = damp; } }
-function caretX() { return SIDE + (Math.min(typist.layout.col, COLS) + 0.5) * ADV; }
+function caretLine() { return typist.caretPos()[0]; }
+function caretX() { const [li, col] = typist.caretPos(); return SIDE + (Math.min(col, COLS) + 0.5 + lineShift(sheet, typist.layout.lines[li])) * ADV; }
 function viewportH() { const vv = window.visualViewport; return vv ? vv.height + vv.offsetTop : innerHeight; }
 // The type line sits as low as the machine allows: room under it for the rod, the guide and the dock.
 function strikeLine() {
   const vh = viewportH(), below = (-ROD_Y + PILL_R) * zoom + 104;
   return Math.round(clamp(vh - below, vh * 0.5, vh * 0.76));
 }
-function reviewLimit() { return typist.layout.line * LH + topMargin(sheet); }
+// How far the page can roll from the caret's line: back to the top, or on to the last line.
+function reviewLimit() { return caretLine() * LH + topMargin(sheet); }
+function reviewMin() { return Math.min(0, (caretLine() - (typist.layout.lines.length - 1)) * LH); }
 function retarget(jump) {
   spring.x.to = caretX();
-  spring.y.to = typist.layout.line * LH - review;
+  spring.y.to = caretLine() * LH - review;
   spring.sy.to = strikeLine();
   spring.lamp.to = lampOn ? 1 : 0;
   if (jump) for (const k in spring) { spring[k].v = spring[k].to; spring[k].vel = 0; }
@@ -878,11 +1022,11 @@ function frame(t) {
   if (coast) {
     review += coast.v * dt; coast.v *= Math.pow(DECEL, dt * 1000);
     const lim = reviewLimit();
-    if (review < 0 || review > lim) {                     // ran into the end: hand the speed to a spring
-      review = Math.min(Math.max(review, 0), lim);
-      spring.y.to = typist.layout.line * LH - review; spring.y.vel = -coast.v; setFeel(["y"], 0.42, 1); coast = null;
+    if (review < reviewMin() || review > lim) {           // ran into the end: hand the speed to a spring
+      review = clamp(review, reviewMin(), lim);
+      spring.y.to = caretLine() * LH - review; spring.y.vel = -coast.v; setFeel(["y"], 0.42, 1); coast = null;
     } else {
-      spring.y.to = spring.y.v = typist.layout.line * LH - review; spring.y.vel = -coast.v;
+      spring.y.to = spring.y.v = caretLine() * LH - review; spring.y.vel = -coast.v;
       if (Math.abs(coast.v) < 4) { coast = null; spring.y.vel = 0; }
     }
   }
@@ -925,15 +1069,16 @@ function placeGhost() {
   const blank = !typist.chars.length;
   ghost.hidden = !blank;
   if (!blank) return;
-  const face = byId(FACES, sheet.face), [startX, base] = toScreen(SIDE - PAPER_W / 2, spring.y.v);
+  const face = byId(FACES, sheet.face), k = (ALIGNS.find(a => a.id === sheet.align) || ALIGNS[0]).k;
+  const [startX, base] = toScreen(SIDE - PAPER_W / 2 + k * (PAPER_W - SIDE * 2), spring.y.v);
   const ask = $("#ghostAsk"), start = $("#ghostStart");
   ask.hidden = typing;
   ask.textContent = finePointer() ? "No first line yet? Just start typing." : "No first line yet? Tap the page.";
   ask.style.fontSize = Math.max(12, face.size * 0.46 * zoom) + "px";
   ask.style.left = W / 2 + "px"; ask.style.top = (base - LH * 1.35 * zoom) + "px";
   start.style.fontFamily = `"${face.family}", var(--mono)`;
-  start.style.fontSize = face.size * zoom + "px";
-  start.style.left = startX + "px"; start.style.top = base + "px";
+  start.style.fontSize = face.size * TYPE_K * zoom + "px";
+  start.style.left = startX + "px"; start.style.top = base + "px"; start.style.translate = `${-k * 100}% 0`;
   start.style.opacity = typing ? "0.55" : "1";
 }
 
@@ -985,6 +1130,9 @@ uniform sampler2D uFlower; uniform vec4 uFlowerRect; uniform float uFlowerOn;
 uniform float uLamp; uniform vec3 uLampPos; uniform float uLampReach;
 uniform float uPxPerPt; uniform vec2 uView;
 uniform float uRodY, uRodR, uCaretX;
+uniform vec4 uGrid;     // top margin, line height, side margin, column width (points)
+uniform vec4 uSel;      // selection: first line, first column, last line, end column; x < 0 when nothing is selected
+uniform vec2 uSelShift; // how far the first and last selected lines are shifted by the alignment, in columns
 varying vec2 vSheet; varying vec3 vWorld; varying vec3 vNormal; varying float vCurl; varying float vRoll;
 
 float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -1052,6 +1200,15 @@ void main() {
   float inkAmt = cov * strength * mix(1.0, weave, 0.85 * weaveOn);
   inkAmt = max(inkAmt, halo * 0.11 * strength);
   inkAmt *= (0.9 + 0.1 * tooth) * inside;
+  // ---- A selection: a soft blue wash behind the chosen letters, under the ink ----
+  if (uSel.x >= 0.0 && uFlat < 0.5) {
+    float sl = floor((s.y - uGrid.x) / uGrid.y + 0.74), sc = (s.x - uGrid.z) / uGrid.w;
+    float inLine = step(0.0, sc) * step(sc, (uPaperW - 2.0 * uGrid.z) / uGrid.w);
+    float picked = step(uSel.x, sl) * step(sl, uSel.z) * inLine
+                 * (sl > uSel.x ? 1.0 : step(uSel.y, sc - uSelShift.x))
+                 * (sl < uSel.z ? 1.0 : step(sc - uSelShift.y, uSel.w));
+    col = mix(col, col * vec3(0.7, 0.82, 1.0), picked);
+  }
   col = mix(col, uInkCol, clamp(inkAmt, 0.0, 1.0) * 0.95);
 
   // ---- The pressed flower: dyes soaked into the sheet, and a faint stain around it ----
@@ -1130,6 +1287,7 @@ async function initGL() {
     uPxPerPt: { value: 1 }, uView: { value: new THREE.Vector2(1, 1) },
     uRodY: { value: ROD_Y }, uRodR: { value: ROD_R }, uCaretX: { value: 0 },
     uBendY: { value: BEND_Y }, uBendR: { value: PLATEN_R },
+    uGrid: { value: new THREE.Vector4() }, uSel: { value: new THREE.Vector4(-1, 0, 0, 0) }, uSelShift: { value: new THREE.Vector2() },
   };
   const paperMat = new THREE.ShaderMaterial({ uniforms, vertexShader: PAPER_VS, fragmentShader: PAPER_FS, extensions: { derivatives: true },
     transparent: true, premultipliedAlpha: true, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor });
@@ -1148,7 +1306,6 @@ async function initGL() {
   const rubber = new THREE.MeshStandardMaterial({ color: 0x121110, roughness: 0.74, metalness: 0 });
   const platen = new THREE.Mesh(new THREE.CylinderGeometry(PLATEN_R - 0.6, PLATEN_R - 0.6, 1, 72, 1, true), rubber);
   platen.rotation.z = Math.PI / 2; scene.add(platen);
-
   const guide = new THREE.Group(); scene.add(guide);
   // Glossy ivory enamel.
   const pillMat = new THREE.MeshPhysicalMaterial({ color: 0xEFEAE0, roughness: 0.34, metalness: 0, clearcoat: 0.85, clearcoatRoughness: 0.22 });
@@ -1297,6 +1454,9 @@ async function initGL() {
     uniforms.uWinTop.value = viewTop - 90; uniforms.uWinH.value = (viewBottom - viewTop) + 180;
     if (INK.dirty || INK.sig !== inkSig() || viewTop - 30 < INK.top || viewBottom + 30 > INK.top + INK.h) redrawInk((viewTop + viewBottom) / 2);
     uniforms.uPxPerPt.value = zoom * DPR; uniforms.uView.value.set(W * DPR, H * DPR);
+    uniforms.uGrid.value.set(topMargin(sheet), LH, SIDE, ADV);
+    const box = selBox();
+    if (box) { uniforms.uSel.value.set(...box.slice(0, 4)); uniforms.uSelShift.value.set(box[4], box[5]); } else uniforms.uSel.value.x = -1;
     const cx = spring.x.v - PAPER_W / 2, camY = camera.position.y;
     uniforms.uCaretX.value = cx;
     // Rod across the whole window, capped at both ends; parts in front are placed so they line up with the type.
@@ -1382,6 +1542,16 @@ function draw2D() {
   const ox = -PAPER_W / 2, oy = -topMargin(sheet) - spring.y.v, viewTop = -sy / zoom;
   g.translate(0, viewTop);
   drawSheet(g, sheet, typist.layout, ox, oy - viewTop, null, W / zoom, H / zoom, true);
+  const box = selBox();
+  if (box) {
+    const y0 = oy - viewTop + topMargin(sheet);
+    g.save(); g.globalCompositeOperation = "multiply"; g.fillStyle = "#B3D1FF";
+    for (let li = box[0]; li <= box[2]; li++) {
+      const c0 = li === box[0] ? box[1] + box[4] : 0, c1 = li === box[2] ? box[3] + box[5] : COLS;
+      g.fillRect(ox + SIDE + c0 * ADV, y0 + (li - 0.74) * LH, (c1 - c0) * ADV, LH);
+    }
+    g.restore();
+  }
   g.restore();
   const z = zoom, ry = sy - ROD_Y * z, cx = W / 2 + (spring.x.v - PAPER_W / 2) * z;
   g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(0, ry + ROD_R * z, W, 4 * z);
@@ -1397,27 +1567,171 @@ function draw2D() {
   g.fillStyle = "#3b3936"; g.fillRect(cx - 4.25 * z, sy + 6 * z, 8.5 * z, 1.7 * z); g.fillRect(cx - 0.85 * z, sy + 7 * z, 1.7 * z, 15 * z);
 }
 
+// ---------- Selecting: drag across letters, then copy, cut, delete or type over them ----------
+let sel = null;                                  // character boundaries: a where the selection began, b where it ends
+const undoStack = [];
+function selRange() {
+  if (!sel) return null;
+  const a = Math.min(sel.a, sel.b), b = Math.max(sel.a, sel.b);
+  return a < b ? [a, b] : null;
+}
+function selText() { const r = selRange(); return r ? typist.chars.slice(r[0], r[1]).join("") : ""; }
+// Line and column of character i. A line break sits just past its line's last letter.
+function charPos(i) {
+  const lines = typist.layout.lines;
+  for (let li = 0; li < lines.length; li++) {
+    const g = lines[li].glyphs;
+    if (g.length && i >= g[0].index && i <= g[g.length - 1].index) return [li, g[i - g[0].index].col];
+    if (lines[li].end === i) return [li, g.length];
+  }
+  const li = lines.length - 1; return [li, lines[li].glyphs.length];
+}
+// The selection as the shader draws it: first line, first column, last line, end column, and both lines' alignment shifts.
+function selBox() {
+  const r = selRange(); if (!r) return null;
+  const A = charPos(r[0]), B = charPos(r[1] - 1), lines = typist.layout.lines;
+  return [A[0], A[1], B[0], B[1] + 1, lineShift(sheet, lines[A[0]]), lineShift(sheet, lines[B[0]])];
+}
+const editBar = $("#editBar");
+function setSel(a, b) {
+  sel = { a, b }; document.body.classList.add("selecting");
+  const some = !!selRange();
+  for (const btn of editBar.querySelectorAll("[data-needs-sel]")) btn.disabled = !some;
+  kick();
+}
+function clearSel() { if (!sel) return; sel = null; document.body.classList.remove("selecting"); kick(); }
+// Which gap between letters sits under a point on screen (the inverse of toScreen, bow included).
+function boundaryAt(px, py) {
+  const d = camDist(), camY = (spring.sy.v - H / 2) / zoom;
+  let x = (px - W / 2) / zoom, k = 1;
+  if (GL) { for (let i = 0; i < 2; i++) { k = d / (d - paperDepth(x)); x = (px - W / 2) / zoom / k; } }
+  const y = camY - (py - H / 2) / (zoom * k), tm = topMargin(sheet);
+  const sheetX = x + PAPER_W / 2, sheetY = tm + spring.y.v - y;
+  const lines = typist.layout.lines, li = clamp(Math.floor((sheetY - tm) / LH + 0.74), 0, lines.length - 1);
+  const line = lines[li], c = (sheetX - SIDE) / ADV - lineShift(sheet, line);
+  for (const g of line.glyphs) if (c < g.col + 0.5) return g.index;
+  if (line.end != null) return line.end;
+  return line.glyphs.length ? line.glyphs[line.glyphs.length - 1].index + 1 : typist.chars.length;
+}
+function wordAround(i) {
+  const c = typist.chars, inWord = k => k >= 0 && k < c.length && !/\s/.test(c[k]);
+  let a = inWord(i) ? i : inWord(i - 1) ? i - 1 : -1;
+  if (a < 0) return [i, i];
+  while (inWord(a - 1)) a--;
+  let b = a; while (inWord(b)) b++;
+  return [a, b];
+}
+function selectAll() { if (typist.chars.length) setSel(0, typist.chars.length); }
+// After any edit that is not a plain keystroke: save, re-ink the page, put the machine at the caret.
+function refresh() {
+  sheet.text = typist.text; sheet.ids = packIds(typist.ids); sheet.updated = Date.now(); persist();
+  review = clamp(review, reviewMin(), reviewLimit()); coast = null;
+  if (GL) GL.redrawAll();
+  retarget(); kick(); updateMeta();
+}
+const snapshot = () => ({ text: typist.text, ids: packIds(typist.ids), caret: typist.caret });
+function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 50) undoStack.shift(); lastEdit = performance.now(); }
+// Typing is undone a burst at a time: a pause, or moving the caret, starts a new step.
+let lastEdit = 0;
+function undoMark() { if (performance.now() - lastEdit > 1200) pushUndo(); lastEdit = performance.now(); }
+function removeSel(quiet) {
+  const r = selRange(); if (!r) return 0;
+  pushUndo(); clearSel();
+  typist.remove(r[0], r[1]); typist.setCaret(r[0]); refresh();
+  if (!quiet) feedback(["backspace"]);
+  return r[1] - r[0];
+}
+function deleteSel() {
+  const n = removeSel();
+  if (n) toast(n === 1 ? "Took back 1 letter." : `Took back ${thousands(n)} letters.`, { label: "Undo", run: undoEdit });
+}
+function undoEdit() {
+  if (!undoStack.length) return;
+  const sn = undoStack.pop();
+  clearSel(); typist = new Typist(sn.text, sn.ids); typist.setCaret(sn.caret); review = 0; refresh();
+  unlockAudio(); play("feed", 0.6);
+}
+// Copies through a throwaway text field, which works in every browser and inside the artifact frame.
+let keepTyping = false;
+function copyText(text) {
+  const t = document.createElement("textarea"), back = document.activeElement;
+  t.value = text; t.setAttribute("readonly", ""); t.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0";
+  keepTyping = true; document.body.appendChild(t); t.select(); t.setSelectionRange(0, text.length);
+  let ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+  t.remove(); if (back && back !== document.body) back.focus({ preventScroll: true }); keepTyping = false;
+  if (!ok) {
+    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => toast("This browser won't let the page copy. Try ⌘C or Ctrl+C."));
+    else toast("This browser won't let the page copy.");
+  }
+}
+function copySel() { const t = selText(); if (!t) return false; copyText(t); toast("Copied."); return true; }
+function cutSel() { const t = selText(); if (!t) return; copyText(t); removeSel(); toast("Cut.", { label: "Undo", run: undoEdit }); }
+async function pasteClipboard() {
+  let text = "";
+  try { text = navigator.clipboard ? await navigator.clipboard.readText() : ""; } catch (e) {}
+  if (text) { setTyping(true); strike(text); }
+  else toast(finePointer() ? "The browser keeps the clipboard private here. Press ⌘V or Ctrl+V." : "The browser keeps the clipboard private here. Tap the page, then paste from your keyboard.");
+}
+
 // ---------- Typing ----------
 function strike(input) {
   if (!input) return;
-  unlockAudio();
-  const before = typist.layout.line;
-  after(typist.type(input), before);
+  if (selRange()) { removeSel(true); } else clearSel();   // typing replaces a selection, wherever it is
+  unlockAudio(); undoMark();
+  edit(() => typist.type(input));
 }
-function takeBack() { unlockAudio(); const before = typist.layout.line; after(typist.backspace(), before); }
-function after(events, beforeLine) {
+function takeBack(forward) {
+  if (selRange()) { deleteSel(); return; }
+  clearSel(); unlockAudio(); undoMark();
+  edit(() => forward ? typist.forwardDelete() : typist.backspace());
+}
+// One keystroke: in the middle of the text the lines after it may reflow, so re-ink more than the line typed on.
+function edit(change) {
+  const atEnd = typist.caret === typist.chars.length, beforeLine = caretLine(), beforeCount = typist.layout.lines.length;
+  const events = change();
   feedback(events);
   if (!events.length || (events.length === 1 && events[0] === "jammed")) return;
-  const isReturn = events.includes("return");
-  if (isReturn) setFeel(["x", "y"], 0.42, 0.86); else setFeel(["x", "y"], 0.1, 0.95);
+  if (events.includes("return")) setFeel(["x", "y"], 0.42, 0.86); else setFeel(["x", "y"], 0.1, 0.95);
   review = 0; coast = null;
-  sheet.text = typist.text; sheet.updated = Date.now(); persist();
-  if (GL) GL.patchInk(Math.max(0, Math.min(beforeLine, typist.layout.line) - 1), Math.max(beforeLine, typist.layout.line) + 1);
+  sheet.text = typist.text; sheet.ids = packIds(typist.ids); sheet.updated = Date.now(); persist();
+  const now = caretLine(), lines = typist.layout.lines;
+  if (GL) {
+    if (atEnd && typist.caret === typist.chars.length) GL.patchInk(Math.max(0, Math.min(beforeLine, now) - 1), Math.max(beforeLine, now) + 1);
+    else if (lines.length !== beforeCount) GL.redrawAll();
+    else { let end = now; while (end < lines.length - 1 && !lines[end].ret) end++; GL.patchInk(Math.max(0, Math.min(beforeLine, now) - 1), end + 1); }
+  }
   retarget(); kick(); updateMeta();
+}
+// Moves the caret (Shift extends a selection from where it was). The page rolls the caret's line to the type guide.
+function moveCaret(b, extend) {
+  const from = typist.caret; lastEdit = 0;
+  if (extend) { const anchor = sel ? sel.a : from; typist.setCaret(b); setSel(anchor, typist.caret); }
+  else { clearSel(); typist.setCaret(b); }
+  review = 0; coast = null; setFeel(["x", "y"], 0.3, 0.9); retarget(); kick();
+}
+// The gap nearest to column c on line li (alignment included).
+function boundaryOnLine(li, c) {
+  const line = typist.layout.lines[clamp(li, 0, typist.layout.lines.length - 1)];
+  for (const g of line.glyphs) if (c < g.col + 0.5) return g.index;
+  if (line.end != null) return line.end;
+  return line.glyphs.length ? line.glyphs[line.glyphs.length - 1].index + 1 : typist.chars.length;
+}
+function caretKey(e) {
+  const [li, col] = typist.caretPos(), r = selRange(), n = typist.chars.length, lines = typist.layout.lines;
+  const mod = e.metaKey || e.ctrlKey, k = e.key;
+  let b = null;
+  if (k === "ArrowLeft") b = mod ? boundaryOnLine(li, -1) : r && !e.shiftKey ? r[0] : typist.caret - 1;
+  else if (k === "ArrowRight") b = mod ? boundaryOnLine(li, 1e9) : r && !e.shiftKey ? r[1] : typist.caret + 1;
+  else if (k === "ArrowUp") b = mod ? 0 : li > 0 ? boundaryOnLine(li - 1, col - 0.5) : 0;
+  else if (k === "ArrowDown") b = mod ? n : li < lines.length - 1 ? boundaryOnLine(li + 1, col - 0.5) : n;
+  else if (k === "Home") b = mod ? 0 : boundaryOnLine(li, -1);
+  else if (k === "End") b = mod ? n : boundaryOnLine(li, 1e9);
+  if (b === null) return false;
+  e.preventDefault(); moveCaret(b, e.shiftKey); return true;
 }
 // The hidden field always holds two spaces, so Backspace has something to delete on phone keyboards.
 const SENTINEL = "  ";
-const BACKSPACES = new Set(["deleteContentBackward", "deleteWordBackward", "deleteSoftLineBackward", "deleteHardLineBackward", "deleteContentForward"]);
+const BACKSPACES = new Set(["deleteContentBackward", "deleteWordBackward", "deleteSoftLineBackward", "deleteHardLineBackward"]);
 function resetKeys() { keys.value = SENTINEL; keys.setSelectionRange(SENTINEL.length, SENTINEL.length); }
 let composing = false;
 keys.addEventListener("compositionstart", () => { composing = true; });
@@ -1429,6 +1743,7 @@ keys.addEventListener("beforeinput", e => {
   else if (t === "insertLineBreak" || t === "insertParagraph") { e.preventDefault(); strike("\n"); }
   else if (t === "insertFromPaste" || t === "insertFromDrop") { e.preventDefault(); strike((e.dataTransfer && e.dataTransfer.getData("text/plain")) || e.data || ""); }
   else if (BACKSPACES.has(t)) { e.preventDefault(); takeBack(); }
+  else if (t === "deleteContentForward") { e.preventDefault(); takeBack(true); }
   else if (t && t.startsWith("delete")) e.preventDefault();
 });
 keys.addEventListener("input", () => {
@@ -1443,12 +1758,13 @@ keys.addEventListener("paste", e => {
   if (text) { e.preventDefault(); strike(text); }
 });
 keys.addEventListener("keydown", e => {
+  if (!e.altKey && caretKey(e)) return;
   if (e.key === "Escape") { e.preventDefault(); setTyping(false); }
   else if (e.key === "Tab") { e.preventDefault(); strike("\t"); }
   else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); setTyping(false); openPanel("savePanel", $("#saveKey")); }
   else if (e.altKey && e.code === "KeyN") { e.preventDefault(); feedNew(); }
 });
-keys.addEventListener("blur", () => { if (typing && !panelOpen()) setTyping(false); });
+keys.addEventListener("blur", () => { if (typing && !panelOpen() && !keepTyping) setTyping(false); });
 
 function setTyping(on) {
   if (on === typing && (!on || document.activeElement === keys)) return;
@@ -1484,50 +1800,76 @@ stage.addEventListener("pointerdown", e => {
   if (e.pointerType === "mouse") e.preventDefault();
   const moving = coast || Math.abs(spring.y.vel) > 40;
   coast = null;
-  const start = typist.layout.line * LH - spring.y.v;      // catch the page where it is right now
+  const start = caretLine() * LH - spring.y.v;      // catch the page where it is right now
   if (moving) { review = start; spring.y.to = spring.y.v; spring.y.vel = 0; }
-  drag = { id: e.pointerId, y: e.clientY, start, moved: false, caught: moving || swallowed, wasTyping: typing, samples: [{ t: e.timeStamp, y: e.clientY }] };
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, start, moved: false, caught: moving || swallowed, wasTyping: typing, samples: [{ t: e.timeStamp, y: e.clientY }] };
   stage.setPointerCapture(e.pointerId);
+  // A mouse selects by dragging (Shift extends); a finger scrolls, and selects a word after a long press.
+  const at = drag.at = boundaryAt(e.clientX, e.clientY);
+  if (e.pointerType === "mouse") {
+    drag.pick = e.shiftKey && sel ? sel.a : at;
+    if (e.shiftKey && sel) { drag.selecting = drag.moved = true; setSel(sel.a, at); }
+  } else {
+    drag.hold = setTimeout(() => {
+      if (!drag || drag.moved) return;
+      const w = wordAround(at); drag.pick = w[0]; drag.selecting = drag.moved = true;
+      setSel(w[0], w[1]); buzz(10);
+    }, 450);
+  }
 });
 stage.addEventListener("pointermove", e => {
   if (!drag || e.pointerId !== drag.id) return;
+  if (drag.pick != null) {
+    if (!drag.selecting && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) return;
+    drag.selecting = drag.moved = true;
+    setSel(drag.pick, boundaryAt(e.clientX, e.clientY));
+    return;
+  }
   const dy = e.clientY - drag.y;
-  if (!drag.moved && Math.abs(dy) > 6) drag.moved = true;
+  if (!drag.moved && Math.abs(dy) > 6) { drag.moved = true; clearTimeout(drag.hold); }
   pushSample(drag.samples, e);
   if (!drag.moved) return;
-  const raw = drag.start + dy / zoom, lim = reviewLimit(), dim = H / zoom;
-  review = raw < 0 ? -rubber(-raw, dim) : raw > lim ? lim + rubber(raw - lim, dim) : raw;
-  spring.y.to = spring.y.v = typist.layout.line * LH - review; spring.y.vel = 0;
+  const raw = drag.start + dy / zoom, lim = reviewLimit(), low = reviewMin(), dim = H / zoom;
+  review = raw < low ? low - rubber(low - raw, dim) : raw > lim ? lim + rubber(raw - lim, dim) : raw;
+  spring.y.to = spring.y.v = caretLine() * LH - review; spring.y.vel = 0;
   rollingByHand(); kick();
 });
 function endDrag(e) {
   if (!drag || e.pointerId !== drag.id) return;
-  const d = drag; drag = null;
+  const d = drag; drag = null; clearTimeout(d.hold);
+  if (d.selecting) { if (!selRange() && e.pointerType === "mouse") clearSel(); return; }
   if (!d.moved) {
     const lim = reviewLimit();
-    if (review < 0 || review > lim) { review = clamp(review, 0, lim); setFeel(["y"], 0.42, 1); retarget(); kick(); }
-    if (!d.caught) setTyping(!d.wasTyping);
+    if (review < reviewMin() || review > lim) { review = clamp(review, reviewMin(), lim); setFeel(["y"], 0.42, 1); retarget(); kick(); }
+    if (d.caught) return;
+    // A tap on the paper puts the caret there, like a notes app; a tap on the desk beside it stops typing.
+    const left = toScreen(-PAPER_W / 2, 0)[0], right = toScreen(PAPER_W / 2, 0)[0], top = toScreen(0, topMargin(sheet) + spring.y.v)[1];
+    if (e.clientX < left || e.clientX > right || e.clientY < top) { clearSel(); if (typing) setTyping(false); return; }
+    moveCaret(d.at);
+    if (!typing) setTyping(true);
     return;
   }
   const v = velocityOf(d.samples, e.timeStamp) / zoom, lim = reviewLimit();
-  if (review < 0 || review > lim) {
-    review = Math.min(Math.max(review, 0), lim);
-    spring.y.to = typist.layout.line * LH - review; spring.y.vel = -v; setFeel(["y"], 0.42, 1);
+  if (review < reviewMin() || review > lim) {
+    review = clamp(review, reviewMin(), lim);
+    spring.y.to = caretLine() * LH - review; spring.y.vel = -v; setFeel(["y"], 0.42, 1);
   } else if (Math.abs(v) > 30 && !reduceMotion) {
     coast = { v }; handRollUntil = performance.now() + 2500;
   } else { spring.y.to = spring.y.v; }
   kick();
 }
 stage.addEventListener("pointerup", endDrag);
+stage.addEventListener("dblclick", e => { const w = wordAround(boundaryAt(e.clientX, e.clientY)); if (w[0] < w[1]) setSel(w[0], w[1]); });
+stage.addEventListener("contextmenu", e => e.preventDefault());
 stage.addEventListener("pointercancel", endDrag);
 stage.addEventListener("wheel", e => {
   e.preventDefault(); coast = null;
-  review = Math.min(Math.max(review - e.deltaY / zoom, 0), reviewLimit());
+  review = clamp(review - e.deltaY / zoom, reviewMin(), reviewLimit());
   rollingByHand(); setFeel(["y"], 0.14, 1); retarget(); kick();
 }, { passive: false });
 function scrollBy(points) {
   coast = null;
-  review = Math.min(Math.max(review + points, 0), reviewLimit());
+  review = clamp(review + points, reviewMin(), reviewLimit());
   rollingByHand(); setFeel(["y"], 0.38, 1); retarget(); kick();
 }
 document.addEventListener("keydown", e => {
@@ -1550,8 +1892,9 @@ document.addEventListener("keydown", e => {
 // ---------- Sheets ----------
 function openSheet(s, isNew, skipSave) {
   clearTimeout(saveTimer);
-  if (!skipSave && sheet.text.trim()) persist(true);
-  sheet = s; typist = new Typist(sheet.text); review = 0; coast = null;
+  if (!skipSave && filled(sheet)) persist(true);
+  clearSel(); undoStack.length = 0;
+  sheet = s; useMetrics(sheet); typist = new Typist(sheet.text, sheet.ids); review = 0; coast = null;
   store.set("tw.current", sheet.id);
   retarget(true);
   if (isNew) {
@@ -1566,7 +1909,7 @@ function feedNew() {
   openSheet(newSheet(), true);
   setTyping(true);
 }
-function sheetName(s) { return (s.text.split("\n").find(l => l.trim()) || "").trim() || "New sheet"; }
+function sheetName(s) { return (s.title || "").trim() || (s.text.split("\n").find(l => l.trim()) || "").trim() || "New sheet"; }
 const wordCount = t => t.split(/\s+/).filter(Boolean).length;
 function thousands(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, "'"); }
 function updateMeta() {
@@ -1574,7 +1917,7 @@ function updateMeta() {
   const count = $("#count"), label = `${thousands(n)} / ${thousands(MAX_CHARS)}`;
   if (count.textContent.length !== label.length) forgetHudBoxes();
   count.textContent = label;
-  document.title = sheet.text.trim() ? `${sheetName(sheet)} · TypeWrite` : "TypeWrite by Jericho";
+  document.title = filled(sheet) ? `${sheetName(sheet)} · TypeWrite` : "TypeWrite by Jericho";
   stage.setAttribute("aria-label", sheet.text ? "Your sheet: " + sheet.text.slice(0, 2000) : "A blank sheet in a typewriter");
   placeGhost();
 }
@@ -1592,7 +1935,8 @@ function panelState(id) {
 function panelOpen() { return !!current; }
 function setInert(on) { [hud, stage, $("#dock"), keys, ghost].forEach(el => { el.inert = on; }); }
 function setExpanded(st, on) { document.querySelectorAll(`[aria-controls="${st.id}"]`).forEach(b => b.setAttribute("aria-expanded", String(on))); }
-const RENDER = { sheetsPanel: renderSheets, savePanel: renderSave, paperPanel: renderPickers, inkPanel: renderPickers, facePanel: renderPickers, flowerPanel: renderPickers };
+function renderTitle() { titleField.value = sheet.title || ""; setTimeout(() => titleField.focus({ preventScroll: true }), 60); }
+const RENDER = { titlePanel: renderTitle, sheetsPanel: renderSheets, savePanel: renderSave, paperPanel: renderPickers, inkPanel: renderPickers, facePanel: renderPickers, flowerPanel: renderPickers };
 function openPanel(id, opener) {
   if (typing) setTyping(false);
   if (current && current.id === id) { closePanel(); return; }
@@ -1756,6 +2100,12 @@ function renderPickers() {
     b.append(tileCanvas(150, 64, g => { paperFill(g, 150, 64, paperDef); g.fillStyle = ink.color; g.font = `30px "${f.family}"`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("Aa Qq", 75, 34); }),
              document.createTextNode(f.name));
   });
+  radioGroup($("#sizeSeg"), SIZES, "size", (b, z) => { b.className = "seg-btn"; b.textContent = z.name; });
+  radioGroup($("#alignSeg"), ALIGNS, "align", (b, a) => {
+    b.className = "seg-btn"; b.setAttribute("aria-label", a.name); b.title = a.name;
+    const rows = { left: [[4, 16], [4, 12], [4, 16], [4, 10]], center: [[4, 16], [6, 12], [4, 16], [7, 10]], right: [[4, 16], [8, 12], [4, 16], [10, 10]] }[a.id];
+    b.innerHTML = `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${rows.map(([x, w], i) => `<path d="M${x} ${6 + i * 4}h${w}"/>`).join("")}</svg>`;
+  });
   radioGroup($("#flowerTiles"), FLOWERS, "flower", (b, f) => {
     b.className = "tile"; b.setAttribute("aria-label", f.name);
     b.append(tileCanvas(100, 64, g => { paperFill(g, 100, 64, paperDef); if (f.id !== "none") drawFlower(g, f.id, 50, 32, 58, -16, sheet.seed); }), document.createTextNode(f.name));
@@ -1765,10 +2115,27 @@ function choose(key, value) {
   unlockAudio(); playKey();
   sheet[key] = value;
   const d = store.get("tw.defaults", {}); d[key] = value; store.set("tw.defaults", d);
-  if (sheet.text.trim()) persist(true);
-  if (GL && key === "face") GL.redrawAll();
-  renderPickers(); retarget(); kick(); placeGhost();
+  if (filled(sheet)) persist(true);
+  if (key === "size") { clearSel(); const at = typist.caret; useMetrics(sheet); typist = new Typist(sheet.text, sheet.ids); typist.setCaret(at); review = clamp(review, reviewMin(), reviewLimit()); }
+  if (GL && (key === "face" || key === "size" || key === "align")) GL.redrawAll();
+  renderPickers(); retarget(); kick(); placeGhost(); updateMeta();
 }
+// Select all, copy, cut, undo and delete work the same whether or not the machine is typing.
+document.addEventListener("keydown", e => {
+  if (panelOpen()) return;
+  const mod = (e.metaKey || e.ctrlKey) && !e.altKey, k = e.key.toLowerCase();
+  if (mod && k === "a") { e.preventDefault(); selectAll(); }
+  else if (mod && k === "c") { if (selText()) { e.preventDefault(); copySel(); } }
+  else if (mod && k === "x") { if (selText()) { e.preventDefault(); cutSel(); } }
+  else if (mod && k === "z" && !e.shiftKey) { e.preventDefault(); undoEdit(); }
+  else if (!typing && selRange() && (e.key === "Backspace" || e.key === "Delete")) { e.preventDefault(); deleteSel(); }
+  else if (e.key === "Escape") clearSel();
+});
+document.addEventListener("paste", e => {
+  if (e.target === keys || panelOpen()) return;
+  const text = e.clipboardData && e.clipboardData.getData("text/plain");
+  if (text) { e.preventDefault(); setTyping(true); strike(text); }
+});
 // Arrow keys move through a radio group and choose, like native radio buttons.
 document.addEventListener("keydown", e => {
   const group = e.target.closest && e.target.closest('[role="radiogroup"]');
@@ -1784,7 +2151,7 @@ let lastThrown = null;
 function fmtWhen(ts) { return new Date(ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); }
 function renderSheets() {
   const list = $("#sheetList"); list.innerHTML = "";
-  const all = [sheet, ...sheets.filter(s => s.id !== sheet.id)].filter(s => s.text.trim() || s.id === sheet.id);
+  const all = [sheet, ...sheets.filter(s => s.id !== sheet.id)].filter(s => filled(s) || s.id === sheet.id);
   for (const s of all) {
     const li = document.createElement("li"), isCurrent = s.id === sheet.id;
     li.className = "sheet-row"; li.setAttribute("aria-current", String(isCurrent));
@@ -1792,15 +2159,15 @@ function renderSheets() {
     const thumb = document.createElement("canvas"), k = Math.min(window.devicePixelRatio || 1, 3);
     thumb.width = Math.round(44 * k); thumb.height = Math.round(57 * k);
     const g = thumb.getContext("2d"), sc = 44 * k / PAPER_W; g.scale(sc, sc);
-    drawSheet(g, s, layoutChars(graphemes(s.text.slice(0, 1400))), 0, 0, 57 * k / sc, PAPER_W, 57 * k / sc, false);
+    useMetrics(s); drawSheet(g, s, layoutChars(graphemes(s.text.slice(0, 1400))), 0, 0, 57 * k / sc, PAPER_W, 57 * k / sc, false); useMetrics(sheet);
     const words = wordCount(s.text), info = document.createElement("span");
-    const name = document.createElement("span"); name.className = "sheet-name"; name.textContent = s.text.trim() ? sheetName(s) : "Blank sheet";
+    const name = document.createElement("span"); name.className = "sheet-name"; name.textContent = filled(s) ? sheetName(s) : "Blank sheet";
     const sub = document.createElement("span"); sub.className = "sheet-sub";
     sub.textContent = `${isCurrent ? "In the machine" : fmtWhen(s.updated)} · ${words === 1 ? "1 word" : words + " words"}`;
     info.append(name, sub); open.append(thumb, info);
     open.addEventListener("click", () => { if (!isCurrent) openSheet(s, false); closePanel(); });
     li.appendChild(open);
-    if (s.text.trim()) {
+    if (filled(s)) {
       const del = document.createElement("button"); del.type = "button"; del.className = "trash"; del.setAttribute("aria-label", "Throw away " + sheetName(s)); del.title = "Throw away";
       del.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
       del.addEventListener("click", () => throwAway(s));
@@ -1826,12 +2193,12 @@ function undoThrow() {
 
 // ---------- Downloads ----------
 function renderSave() {
-  const blank = !sheet.text.trim();
+  const blank = !filled(sheet);
   $("#savePng").disabled = blank; $("#saveTxt").disabled = blank;
   $("#saveNote").textContent = blank ? "Type something first, then come back to download it." : "The picture is the sheet exactly as it looks here: paper, ink and flower.";
 }
 function fileBase() {
-  const first = (sheet.text.split("\n").find(l => l.trim()) || "sheet").trim().slice(0, 40).replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase();
+  const first = sheetName(sheet).slice(0, 40).replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase();
   return "typewrite-" + (first || "sheet");
 }
 // Opened inside the Claude artifact viewer, files are offered through its save prompt;
@@ -1855,7 +2222,7 @@ async function saveBlob(blob, name) {
   return true;
 }
 function exportPng() {
-  const L = layoutChars(typist.chars), h = sheetHeight(sheet, L), scale = Math.min(3, 14000 / h);
+  const L = layoutChars(typist.chars, typist.ids), h = sheetHeight(sheet, L), scale = Math.min(3, 14000 / h);
   let c;
   if (GL) c = GL.exportPng(L, h, scale);
   else {
@@ -1868,12 +2235,51 @@ function exportPng() {
   }, "image/png");
 }
 function exportTxt() {
-  saveBlob(new Blob([sheet.text.replace(/\s+$/, "") + "\n"], { type: "text/plain;charset=utf-8" }), fileBase() + ".txt")
+  const head = (sheet.title || "").trim() ? sheet.title.trim() + "\n\n" : "";
+  saveBlob(new Blob([head + sheet.text.replace(/\s+$/, "") + "\n"], { type: "text/plain;charset=utf-8" }), fileBase() + ".txt")
     .then(saved => { if (saved) toast("Saved the words."); });
 }
 
 // ---------- Wiring ----------
 $("#doneKey").addEventListener("click", () => setTyping(false));
+editBar.addEventListener("pointerdown", e => e.preventDefault());   // keep the typing field focused
+editBar.addEventListener("click", e => {
+  const cmd = e.target.closest("[data-cmd]"); if (!cmd || cmd.disabled) return;
+  ({ copy: copySel, cut: cutSel, delete: deleteSel, paste: pasteClipboard, all: selectAll })[cmd.dataset.cmd]();
+});
+// Reset asks twice, then clears every sheet and setting; Undo brings it all back for a few seconds.
+const resetRow = $("#resetRow");
+let resetTimer = 0, lastReset = null;
+function disarmReset() {
+  clearTimeout(resetTimer); resetRow.classList.remove("armed");
+  $("#resetLabel").textContent = "Reset everything"; $("#resetHint").textContent = "Erases every sheet and setting in this browser";
+}
+resetRow.addEventListener("click", () => {
+  if (!resetRow.classList.contains("armed")) {
+    resetRow.classList.add("armed"); $("#resetLabel").textContent = "Click again to erase everything";
+    $("#resetHint").textContent = "All your sheets, and paper, ribbon, type and sound settings";
+    resetTimer = setTimeout(disarmReset, 4000); return;
+  }
+  disarmReset(); closePanel(); resetAll();
+});
+function resetAll() {
+  persist(true);
+  lastReset = { sheets: readSheets(), current: sheet.id, defaults: store.get("tw.defaults", {}), sound: soundOn, buzz: buzzOn, lamp: lampOn };
+  sheets = []; store.set("tw.sheets", []); store.set("tw.defaults", {});
+  soundOn = true; store.set("tw.sound", true); soundKey.setAttribute("aria-pressed", "true"); soundToggle.checked = true;
+  buzzOn = true; store.set("tw.buzz", true); buzzToggle.checked = true;
+  setLamp(false);
+  openSheet(newSheet(), true, true); renderPickers();
+  toast("Everything is cleared.", { label: "Undo", run: undoReset });
+}
+function undoReset() {
+  const r = lastReset; if (!r) return; lastReset = null;
+  store.set("tw.sheets", r.sheets); store.set("tw.defaults", r.defaults); sheets = r.sheets;
+  soundOn = r.sound; store.set("tw.sound", r.sound); soundKey.setAttribute("aria-pressed", String(r.sound)); soundToggle.checked = r.sound;
+  buzzOn = r.buzz; store.set("tw.buzz", r.buzz); buzzToggle.checked = r.buzz;
+  setLamp(r.lamp);
+  openSheet(r.sheets.find(x => x.id === r.current) || newSheet(), false, true); renderPickers();
+}
 $("#newKey").addEventListener("click", feedNew);
 $("#sheetsKey").addEventListener("click", e => openPanel("sheetsPanel", e.currentTarget));
 $("#saveKey").addEventListener("click", e => openPanel("savePanel", e.currentTarget));
@@ -1881,6 +2287,13 @@ $("#paperKey").addEventListener("click", e => openPanel("paperPanel", e.currentT
 $("#inkKey").addEventListener("click", e => openPanel("inkPanel", e.currentTarget));
 $("#faceKey").addEventListener("click", e => openPanel("facePanel", e.currentTarget));
 $("#flowerKey").addEventListener("click", e => openPanel("flowerPanel", e.currentTarget));
+$("#titleKey").addEventListener("click", e => openPanel("titlePanel", e.currentTarget));
+titleField.addEventListener("input", () => {
+  sheet.title = sanitize(titleField.value).replace(/\n/g, " ").slice(0, 48); sheet.updated = Date.now(); persist();
+  if (GL) GL.redrawAll();
+  review = clamp(review, reviewMin(), reviewLimit()); retarget(); kick(); updateMeta();
+});
+titleField.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); closePanel(); } });
 $("#phoneRow").addEventListener("click", () => openPanel("phonePanel", $("#sheetsKey")));
 $("#savePng").addEventListener("click", () => { closePanel(); exportPng(); });
 $("#saveTxt").addEventListener("click", () => { closePanel(); exportTxt(); });
@@ -1920,7 +2333,7 @@ window.addEventListener("pagehide", () => persist(true));
 // Start once the typefaces are in, so the first letters land in the right face.
 (async () => {
   grainTile = makeGrain();
-  try { await Promise.all([document.fonts.load('17px "Courier Prime"'), document.fonts.load('16px "Special Elite"')]); } catch (e) {}
+  try { await Promise.all(FACES.map(f => document.fonts.load(`${f.size}px "${f.family}"`))); } catch (e) {}
   GL = await initGL();
   resize(); updateMeta();
   window.__tw = { get typist() { return typist; }, get sheet() { return sheet; }, get gl() { return !!GL; }, get busy() { return running; }, spring, strike, takeBack, setTyping, exportPng, exportTxt, layoutChars, graphemes, setLamp, openPanel };

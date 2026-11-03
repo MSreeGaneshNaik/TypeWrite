@@ -138,7 +138,8 @@ The desk is a neutral near-black. The chrome is a near-neutral light grey that n
 
 ## Typography
 
-- **The page:** Courier Prime (Pica) or Special Elite (Elite), at a fixed pitch of 10.2 pt and a 26 pt line, scaled by the zoom.
+- **The page:** Courier Prime (Pica), Special Elite (Elite), Cutive Mono (Office) or Lekton (Gothic). The pitch is the size: Small, Medium and Large fit 36, 30 and 24 columns in the same 306 pt line, so the advance is 8.5, 10.2 or 12.75 pt, and the line height and face scale with it. Lines sit left, centred or right.
+- **The title:** the sheet's face a size up (advance up to 16.3 pt, shrinking to fit), centred across the top, or beside the pressed flower when there is one.
 - **The wordmark:** Special Elite, "TypeWrite" in the sheets panel masthead, beside "by Jericho" in the label style.
 - **Chrome:** the system face, at 15/600 for panel titles, 14 for body and buttons, and 12 for labels and sublines. Labels are sentence case and never tracked capitals.
 - **The count:** monospace with tabular figures and a typewriter-era thousands mark: `175 / 40'000`.
@@ -148,7 +149,7 @@ The desk is a neutral near-black. The chrome is a near-neutral light grey that n
 - **Page:** 358 × 463 pt (US letter proportions), 30 columns, side margin 26 pt, top margin 70 pt (138 pt with a pressed flower). On screen the paper always runs past the bottom of the window. The download keeps the page size.
 - **Strike line:** placed from the bottom of the visual viewport so the guide clears the dock (`strikeLine()`: the guide's depth plus 104 px above the bottom, held between 50% and 76% of the height). It moves above a phone keyboard. Rod centre 42 pt below the baseline. Guide capsule 82 × 27 pt with the three lamps set straight into its face, 10.5 pt apart. The T pointer sits 7 pt under the baseline.
 - **HUD:** 60 px high, 10 px side inset, 44 px targets. Each side picks its colour from what is behind it (page or desk).
-- **Dock:** centred, 18 px above the safe area. It slides away while typing.
+- **Dock:** centred, 18 px above the safe area. It slides away while typing. While text is selected, an edit bar (Copy, Cut, Delete | Paste, Select all) takes its place.
 - **Panels:** popovers anchored to their button on screens 720 px and wider; full-width bottom sheets with a grabber below that.
 
 ## Elevation & Depth
@@ -181,7 +182,10 @@ Depth is physical, not decorative:
   - 5% have clogged counters, and 1.8% leave a faint double strike.
   - The ribbon wears slowly across the sheet, and punctuation strikes hard.
 - **Ink texture:** a window of the sheet up to 4,096 px tall around the view. Typing re-inks only the touched lines with a direct `texSubImage2D` band upload. The window recentres when the view leaves it.
-- **Dock:** new sheet, typeface, pressed flower, paper, ribbon | desk lamp, key sounds. Icon-only with names on hover and for screen readers.
+- **Dock:** new sheet, typeface (face, size, alignment), title, pressed flower, paper, ribbon | desk lamp, key sounds. Icon-only with names on hover and for screen readers.
+- **Editing:** a caret like a notes app. A click or tap places it and the page rolls that line to the type guide; the guide is the caret. Arrows, Home and End move it, and Shift extends a selection. Drag (mouse), double-click or long-press (touch) selects; selections show as a soft blue wash under the ink. Undo steps back a typing burst or an edit at a time. Every letter keeps its ink seed (an id per character), so edits never re-roll the letters after them.
+- **Reset everything:** in Your sheets. It asks twice, then clears every sheet and setting, with Undo for a few seconds.
+- **Sounds:** cut from real manual typewriters (an Underwood 315 and an Olivetti Dora by Erik Pålsson for Sounds of Changes, CC BY 4.0, plus CC0 bell, return and feed). Credited in the app.
 - **Panels:** springs (opening response 0.32 to 0.44 s, damping 0.86 to 0.88; closing critically damped). Phone sheets drag from the grabber, rubber-band upwards, and dismiss on projected travel past half their height. The scrim follows the drag.
 - **Reading back:** drag with rubber-banding past either end. On release the page coasts with UIScrollView's 0.998/ms deceleration, and a spring takes over at the ends with the coast's speed. Wheel, arrows, Page Up/Down, Home and End also scroll. Rolling by hand gives a ratchet click (and a haptic tap) for every line that passes the strike line.
 - **Download:** the same shader renders flat and evenly lit in 2,048 px bands, as a PNG with a transparent outside edge.
@@ -189,7 +193,7 @@ Depth is physical, not decorative:
 ## Do's and Don'ts
 
 - **Do** keep the paper at 80% of the window width and the strike line just above the dock.
-- **Do** seed anything that appears on the page from the sheet's seed and the character index.
+- **Do** seed anything that appears on the page from the sheet's seed and the character's id.
 - **Do** keep chrome light and floating. Its colour follows what is behind it.
 - **Don't** use the typewriter faces for controls. They are for the page and the wordmark.
 - **Don't** give resting elements shadows or gradients. Depth belongs to the page, the rod and the guide.
