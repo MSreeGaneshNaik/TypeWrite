@@ -789,13 +789,16 @@ function strikeFor(seed, index) {
 }
 const TITLE_GAP = 46;                               // a title takes about two lines above the first one
 const filled = s => !!(s.text.trim() || (s.title || "").trim());
-function topMargin(s) { return (s.flower === "none" ? TOP : TOP_FLOWER) + ((s.title || "").trim() ? TITLE_GAP : 0); }
-// The title: centred at the top, a size up, shrinking to fit when it is long. Seeded like the letters below it.
+// With a pressed flower the title sits beside it, so the first line stays just under the flower.
+function topMargin(s) { return s.flower !== "none" ? TOP_FLOWER : TOP + ((s.title || "").trim() ? TITLE_GAP : 0); }
+// The title: a size up, centred in the space it has (the whole line, or beside the flower), shrinking to fit when long.
+// Seeded like the letters below it.
 function titleLayout(s, face) {
   const chars = graphemes((s.title || "").trim());
   if (!chars.length) return null;
-  const width = PAPER_W - SIDE * 2, adv = Math.min(10.2 * 1.6, width / chars.length), x0 = SIDE + (width - adv * chars.length) / 2;
-  return { base: s.flower === "none" ? TOP : TOP_FLOWER, fs: face.size * adv / 10.2, adv,
+  const flower = s.flower !== "none", right = flower ? PAPER_W - 70 - 60 : PAPER_W - SIDE, width = right - SIDE;
+  const adv = Math.min(10.2 * 1.6, width / chars.length), x0 = SIDE + (width - adv * chars.length) / 2;
+  return { base: flower ? 66 + face.size * adv / 10.2 * 0.3 : TOP, fs: face.size * adv / 10.2, adv,
            glyphs: chars.map((ch, i) => ({ ch, index: -1 - i, x: x0 + (i + 0.5) * adv })) };
 }
 // g: context already scaled to sheet points. view: visible height in sheet points.
@@ -996,6 +999,7 @@ function frame(t) {
   if (lastRollLine !== null && rollLine !== lastRollLine && performance.now() < handRollUntil && t - lastTick > 28) { ratchet(); lastTick = t; }
   lastRollLine = rollLine;
   try { draw(); } catch (err) { running = false; throw err; }
+  startView();
   const settled = lampGlow.every(g => g === 0) && !coast && Object.values(spring).every(s => Math.abs(s.v - s.to) < 0.01 && Math.abs(s.vel) < 0.01);
   if (settled) { for (const k in spring) { spring[k].v = spring[k].to; spring[k].vel = 0; } draw(); running = false; }
   else requestAnimationFrame(frame);
@@ -1856,66 +1860,170 @@ vec3 painting(vec2 px, vec2 res) {
 }
 `;
 const FULL_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
-// SSAA (a define) picks four rotated-grid samples where the picture has edges, or one sample for the quick pass.
+// The view is painted in three layers, each into its own target: the plate (sky, sun, hills, meadow), the clouds and the
+// near flowers. SSAA (a define) takes four rotated-grid samples where the picture has edges, or one for the quick pass.
+// The cloud layer is painted wider than the screen (uPadX each side) so it can drift.
+const PAINT_SHIM = PAINT_GLSL.includes("paintingLayer") ? "" : `
+uniform float uLayer;
+vec4 paintingLayer(vec2 px, vec2 res) { return uLayer < 0.5 ? vec4(painting(px, res), 1.0) : vec4(0.0); }`;
 const PAINT_FS = `
-uniform vec2 uRes;
+uniform vec2 uRes; uniform float uPadX;
 varying vec2 vUv;
 ${PAINT_GLSL}
-void main() { gl_FragColor = vec4(painting(vec2(vUv.x, 1.0 - vUv.y) * uRes, uRes), 1.0); }`;
-// The view, then the machine's enamel body from the roller down.
+${PAINT_SHIM}
+void main() { gl_FragColor = paintingLayer(vec2(vUv.x * (uRes.x + 2.0 * uPadX) - uPadX, (1.0 - vUv.y) * uRes.y), uRes); }`;
+// The live view, every frame: the clouds billow and drift like a slow fluid, wind ribbons stream across, the near flowers
+// sway in gusts, pollen floats in the sun; at night stars twinkle and fireflies wander. Then the machine's enamel body.
 const VIEW_FS = `
-uniform sampler2D uPaint; uniform vec2 uRes; uniform float uBodyY, uNight, uLamp;
+uniform sampler2D uPlate, uClouds, uFlora;
+uniform vec2 uRes; uniform float uBodyY, uRollerY, uNight, uLamp, uTime, uPad;
 varying vec2 vUv;
-float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+vec2 h22(vec2 p) { float n = h21(p); return vec2(n, h21(p + n * 17.0)); }
+float vn(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) { return 0.5 * vn(p) + 0.3 * vn(p * 2.03 + 3.1) + 0.2 * vn(p * 4.01 + 7.7); }
+// drifting specks: one per cell at most, moving with the wind; returns brightness
+float specks(vec2 q, float cell, vec2 wind, float t, float size, float density, float blink) {
+  vec2 g = (q - wind * t) / cell, id = floor(g), f = fract(g);
+  vec2 r = h22(id);
+  if (r.x > density) return 0.0;
+  vec2 c = 0.2 + 0.6 * h22(id + 3.7) + 0.18 * vec2(sin(t * (0.6 + r.y) + r.x * 40.0), cos(t * (0.5 + r.x) + r.y * 30.0));
+  float d = length(f - c) * cell;
+  float tw = mix(1.0, 0.5 + 0.5 * sin(t * (1.5 + 2.0 * r.y) + r.x * 60.0), blink);
+  return exp(-d * d / (size * size)) * tw;
+}
 void main() {
   vec2 px = vec2(vUv.x, 1.0 - vUv.y) * uRes;
-  vec3 col = texture2D(uPaint, vUv).rgb;
+  float H = uRes.y, aspect = uRes.x / H, t = uTime;
+  vec2 q = vec2(px.x / H, px.y / H);
+  float roller = uRollerY / H, horizon = roller - 0.22;
+  vec3 col = texture2D(uPlate, vUv).rgb;
+
+  // Clouds: a slow fluid billow (curl of two noise fields) and a long, gentle drift.
+  vec2 w = vec2(fbm(q * 2.4 + vec2(t * 0.030, 1.7)), fbm(q * 2.4 + vec2(5.2, -t * 0.026))) - 0.5;
+  w += 0.5 * (vec2(fbm(q * 5.1 - vec2(t * 0.05, 0.0)), fbm(q * 5.1 + vec2(0.0, t * 0.045) + 9.0)) - 0.5);
+  float drift = uPad * 0.85 * sin(t * 0.021 + 1.3);
+  vec2 cuv = vec2(vUv.x + drift + w.x * 0.012 / aspect, vUv.y + w.y * 0.010);
+  cuv.x = (cuv.x + uPad) / (1.0 + 2.0 * uPad);
+  vec4 cl = texture2D(uClouds, cuv);
+  col = col * (1.0 - cl.a) + cl.rgb;
+
+  // Wind ribbons: thin streams of light that run across the sky and the meadow.
+  vec3 ribbonCol = mix(vec3(1.0, 0.96, 0.86), vec3(0.72, 0.80, 1.0), uNight);
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float base = horizon - 0.16 + fi * 0.13;
+    float y = base + 0.035 * sin(q.x * 1.6 + t * 0.21 + fi * 2.1) + 0.018 * sin(q.x * 3.7 - t * 0.33 + fi * 1.3)
+            + 0.02 * (fbm(vec2(q.x * 0.9 + fi * 4.0, t * 0.05)) - 0.5);
+    float d = abs(q.y - y), width = 0.0035 + 0.0025 * sin(q.x * 2.3 + fi);
+    float strand = smoothstep(width * 2.6, 0.0, d);
+    float run = smoothstep(0.55, 0.95, sin(q.x * 1.2 - t * (0.42 + 0.07 * fi) + fi * 2.7));   // short bright runs travel along it
+    col = mix(col, ribbonCol, strand * run * (0.22 - 0.08 * uNight));
+  }
+
+  // The near flowers sway: a horizontal shear that grows with height above the roller, in rolling gusts.
+  float above = max(roller - q.y, 0.0);
+  float gust = 0.55 + 0.45 * sin(q.x * 2.2 - t * 0.9) * sin(t * 0.37 + q.x * 0.7);
+  float sway = (sin(t * 1.6 + q.x * 7.0) * 0.7 + sin(t * 2.7 + q.x * 13.0 + 1.3) * 0.3) * gust * 0.06 * above * smoothstep(0.0, 0.05, above);
+  vec4 fl = texture2D(uFlora, vUv + vec2(sway / aspect, 0.0));
+  col = col * (1.0 - fl.a) + fl.rgb;
+
+  // Pollen in the sunlight by day; at night, twinkling stars and wandering fireflies.
+  float day = 1.0 - smoothstep(0.35, 0.7, uNight), night = smoothstep(0.55, 0.95, uNight);
+  if (day > 0.0) {
+    float pollen = specks(q, 0.11, vec2(0.012, -0.006), t, 0.0028, 0.35, 0.3) * smoothstep(roller, horizon - 0.25, q.y);
+    col = mix(col, vec3(1.0, 0.95, 0.78), pollen * 0.55 * day);
+  }
+  if (night > 0.0) {
+    float stars = specks(q * vec2(1.0, 1.0) + 13.0, 0.045, vec2(0.0), t, 0.0016, 0.55, 0.9) * smoothstep(horizon - 0.02, 0.0, q.y);
+    stars *= 1.0 - cl.a;
+    col += vec3(0.95, 0.93, 1.0) * stars * 0.85 * night;
+    float flies = specks(q + 5.0, 0.07, vec2(0.006, 0.002), t * 0.8, 0.0035, 0.3, 1.0) * smoothstep(horizon - 0.04, horizon + 0.04, q.y) * smoothstep(roller + 0.01, roller - 0.03, q.y);
+    col += vec3(1.0, 0.82, 0.38) * flies * 1.4 * night;
+  }
+
   float below = px.y - uBodyY;
   if (below > 0.0) {
-    float t = clamp(below / max(uRes.y - uBodyY, 1.0), 0.0, 1.0);
-    vec3 day = mix(vec3(0.62, 0.67, 0.52), vec3(0.47, 0.53, 0.40), t);
-    vec3 night = mix(vec3(0.13, 0.16, 0.19), vec3(0.07, 0.08, 0.11), t);
-    vec3 body = mix(day, night, uNight);
-    body *= 1.0 - 0.35 * exp(-below / (0.035 * uRes.y));                 // shade tucked under the roller
+    float b = clamp(below / max(uRes.y - uBodyY, 1.0), 0.0, 1.0);
+    vec3 body = mix(mix(vec3(0.62, 0.67, 0.52), vec3(0.47, 0.53, 0.40), b), mix(vec3(0.13, 0.16, 0.19), vec3(0.07, 0.08, 0.11), b), uNight);
+    body *= 1.0 - 0.35 * exp(-below / (0.035 * H));                     // shade tucked under the roller
     body += (h21(floor(px)) - 0.5) * 0.012;                              // a fine enamel grain against banding
-    body = mix(body, body * vec3(1.9, 1.45, 1.0), uLamp * 0.6 * exp(-pow((px.x / uRes.x - 0.5) * 2.2, 2.0)) * exp(-below / (0.25 * uRes.y)));
+    body = mix(body, body * vec3(1.9, 1.45, 1.0), uLamp * 0.6 * exp(-pow((px.x / uRes.x - 0.5) * 2.2, 2.0)) * exp(-below / (0.25 * H)));
     col = body;
   }
   gl_FragColor = vec4(col, 1.0);
 }`;
 
+// The view has its own canvas and clock behind the machine, so it can move every frame while the heavy page
+// shader only draws when something on the machine changes.
+function initView() {
+  const canvas = document.createElement("canvas");
+  let r;
+  try { r = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" }); } catch (e) { return null; }
+  stage.insertBefore(canvas, stage.firstChild);
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new THREE.PlaneGeometry(2, 2);
+  const U = { uRes: { value: new THREE.Vector2(1, 1) }, uPadX: { value: 0 }, uRollerY: { value: 0 }, uNight: { value: 0 }, uLayer: { value: 0 } };
+  const mats = [0, 1].map(ssaa => new THREE.ShaderMaterial({ vertexShader: FULL_VS, fragmentShader: PAINT_FS, uniforms: U, defines: { SSAA: ssaa },
+    depthTest: false, depthWrite: false, extensions: { derivatives: true } }));
+  const paintMesh = new THREE.Mesh(quad, mats[1]), paintScene = new THREE.Scene(); paintScene.add(paintMesh);
+  const V = { uPlate: { value: null }, uClouds: { value: null }, uFlora: { value: null }, uRes: { value: new THREE.Vector2(1, 1) },
+              uBodyY: { value: 0 }, uRollerY: { value: 0 }, uNight: { value: 0 }, uLamp: { value: 0 }, uTime: { value: 0 }, uPad: { value: 0.06 } };
+  const viewMat = new THREE.ShaderMaterial({ vertexShader: FULL_VS, fragmentShader: VIEW_FS, uniforms: V, depthTest: false, depthWrite: false });
+  const viewScene = new THREE.Scene(); viewScene.add(new THREE.Mesh(quad, viewMat));
+  const opts = { depthBuffer: false, stencilBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+  const layers = n => Array.from({ length: n }, () => new THREE.WebGLRenderTarget(1, 1, opts));
+  const hi = layers(3), lo = layers(3);
+  let painted = "", size = "";
+  function paint(set, w, h, rollerY, night, ssaa) {
+    paintMesh.material = mats[ssaa];
+    set.forEach((rt, i) => {
+      const pad = i === 1 ? Math.round(w * V.uPad.value) : 0;
+      rt.setSize(w + pad * 2, h);
+      U.uRes.value.set(w, h); U.uPadX.value = pad; U.uRollerY.value = rollerY * h / H; U.uNight.value = night; U.uLayer.value = i;
+      r.setRenderTarget(rt); r.render(paintScene, cam);
+    });
+    r.setRenderTarget(null);
+    [V.uPlate.value, V.uClouds.value, V.uFlora.value] = set.map(rt => rt.texture);
+  }
+  function draw(seconds) {
+    if (size !== `${W}x${H}@${DPR}`) { size = `${W}x${H}@${DPR}`; r.setPixelRatio(DPR); r.setSize(W, H, false); }
+    const d = camDist(), kPl = d / (d + PLATEN_R + BOW + 0.6);
+    const rollerTop = H / 2 - (BEND_Y + PLATEN_R - (spring.sy.to - H / 2) / zoom) * zoom * kPl;   // where the roller will settle
+    const bodyY = H / 2 - (BEND_Y - (spring.sy.v - H / 2) / zoom) * zoom * kPl;
+    const night = spring.lamp.v, fading = Math.abs(night - spring.lamp.to) > 0.002 || Math.abs(spring.lamp.vel) > 0.002;
+    const want = `${size}:${Math.round(rollerTop)}:${night.toFixed(3)}`;
+    if (fading) { paint(lo, W, H, rollerTop, night, 0); painted = ""; }
+    else if (painted !== want) { paint(hi, Math.round(W * DPR), Math.round(H * DPR), rollerTop, night, 1); painted = want; }
+    V.uRes.value.set(W * DPR, H * DPR); V.uBodyY.value = bodyY * DPR; V.uRollerY.value = rollerTop * DPR;
+    V.uNight.value = night; V.uLamp.value = night; V.uTime.value = seconds;
+    r.render(viewScene, cam);
+  }
+  return { draw };
+}
+let VIEW = null, viewLive = false;
+function startView() { if (VIEW && !viewLive) { viewLive = true; requestAnimationFrame(viewLoop); } }
+function viewLoop(t) {
+  VIEW.draw(reduceMotion ? 0 : t / 1000);
+  if (reduceMotion || document.hidden) { viewLive = false; return; }   // a still picture: redrawn only when the machine moves
+  requestAnimationFrame(viewLoop);
+}
+
 async function initGL() {
   try {
     THREE = await import("./vendor/three/three.module.min.js");
   } catch (e) { return null; }
+  VIEW = initView();
   const glCanvas = document.createElement("canvas");
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, alpha: true, powerPreference: "high-performance" });
   } catch (e) { return null; }
   stage.appendChild(glCanvas);
-  renderer.setClearColor(0x161514, 1);
+  renderer.setClearColor(0x000000, 0);                                // clear: the view shows through
   const scene = new THREE.Scene();
-  // The view is painted once into a full-resolution target (four samples a pixel) and again only when the light,
-  // the size or the roller changes; while the lamp is fading it repaints a quicker, single-sample pass each frame.
-  const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new THREE.PlaneGeometry(2, 2);
-  const paintUniforms = { uRes: { value: new THREE.Vector2(1, 1) }, uRollerY: { value: 0 }, uNight: { value: 0 } };
-  const paintMats = [0, 1].map(ssaa => new THREE.ShaderMaterial({ vertexShader: FULL_VS, fragmentShader: PAINT_FS, depthTest: false, depthWrite: false,
-    uniforms: paintUniforms, defines: { SSAA: ssaa }, extensions: { derivatives: true } }));
-  const paintMesh = new THREE.Mesh(quad, paintMats[1]), paintScene = new THREE.Scene(); paintScene.add(paintMesh);
-  const viewMat = new THREE.ShaderMaterial({ vertexShader: FULL_VS, fragmentShader: VIEW_FS, depthTest: false, depthWrite: false,
-    uniforms: { uPaint: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uBodyY: { value: 0 }, uNight: { value: 0 }, uLamp: { value: 0 } } });
-  const viewScene = new THREE.Scene(); viewScene.add(new THREE.Mesh(quad, viewMat));
-  const rtOpts = { depthBuffer: false, stencilBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
-  const paintHi = new THREE.WebGLRenderTarget(1, 1, rtOpts), paintLo = new THREE.WebGLRenderTarget(1, 1, rtOpts);
-  let painted = "";                                                    // what paintHi currently holds
-  function paintView(rt, w, h, rollerY, night, ssaa) {
-    rt.setSize(w, h);
-    paintUniforms.uRes.value.set(w, h); paintUniforms.uRollerY.value = rollerY * h / H;
-    paintUniforms.uNight.value = night; paintMesh.material = paintMats[ssaa];
-    renderer.setRenderTarget(rt); renderer.render(paintScene, ortho); renderer.setRenderTarget(null);
-    viewMat.uniforms.uPaint.value = rt.texture;
-  }
   const camera = new THREE.PerspectiveCamera(30, 1, 1, 10000);
 
   // A soft studio for the metal to reflect: light above, dark below.
@@ -2135,18 +2243,7 @@ async function initGL() {
     lampLight.position.set(cx * kGuide, camY + (-6 - camY) * kGuide, 40); lampLight.intensity = 2.6 * lamp;
     steel.envMapIntensity = 1 - lamp * 0.75; black.envMapIntensity = 1 - lamp * 0.75; pillMat.envMapIntensity = 0.6 * (1 - lamp * 0.7);
     rubber.envMapIntensity = 0.22 * (1 - lamp * 0.8);    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
-    // The view: painted for where the roller will settle, and as far into the night as the lamp has gone.
-    const kPl = dist / (dist + PLATEN_R + BOW + 0.6), camTo = (spring.sy.to - H / 2) / zoom;
-    const rollerTop = H / 2 - (BEND_Y + PLATEN_R - camTo) * zoom * kPl, bodyY = H / 2 - (BEND_Y - camY) * zoom * kPl;
-    const fading = Math.abs(lamp - spring.lamp.to) > 0.002 || Math.abs(spring.lamp.vel) > 0.002;
-    const want = `${W}x${H}@${DPR}:${Math.round(rollerTop)}:${lamp.toFixed(3)}`;
-    if (fading) { paintView(paintLo, W, H, rollerTop, lamp, 0); painted = ""; }
-    else if (painted !== want) { paintView(paintHi, Math.round(W * DPR), Math.round(H * DPR), rollerTop, lamp, 1); painted = want; }
-    viewMat.uniforms.uRes.value.set(W * DPR, H * DPR); viewMat.uniforms.uBodyY.value = bodyY * DPR;
-    viewMat.uniforms.uNight.value = lamp; viewMat.uniforms.uLamp.value = lamp;
-    renderer.autoClear = false; renderer.clear();
-    renderer.render(viewScene, ortho); renderer.clearDepth();
-    renderer.render(scene, camera); renderer.autoClear = true;
+    renderer.render(scene, camera);
   }
   // Downloads go through the same shader, flat and evenly lit, a band at a time.
   function exportGL(L, paperH, scale) {
@@ -2185,7 +2282,7 @@ async function initGL() {
       uniforms.uView.value.copy(keepView);
       hidden.forEach(o => { o.visible = true; });
       etex.dispose();
-      renderer.setPixelRatio(DPR); renderer.setSize(W, H, false); renderer.setClearColor(0x161514, 1);
+      renderer.setPixelRatio(DPR); renderer.setSize(W, H, false); renderer.setClearColor(0x000000, 0);
       renderGL();
     }
     return out;
@@ -2940,7 +3037,7 @@ window.addEventListener("resize", () => {
   else placePanel(current);
 });
 if (window.visualViewport) visualViewport.addEventListener("resize", () => { retarget(); if (typing) keys.style.top = Math.round(spring.sy.to) + "px"; kick(); });
-document.addEventListener("visibilitychange", () => { if (document.hidden) persist(true); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) persist(true); else startView(); });
 window.addEventListener("storage", e => {
   if (e.key !== "tw.sheets") return;
   sheets = mergeSheets(readSheets(), sheets).filter(s => s.id !== sheet.id);
