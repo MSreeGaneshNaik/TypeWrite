@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>TypeWrite by Jericho</title>
 <meta name="description" content="A typewriter in your browser. Every key clacks, the bell rings near the margin, and the ink sits in old paper like the real thing. Download your sheet when you're done.">
-<meta name="theme-color" content="#161514">
+<meta name="theme-color" content="#C9D2D0">
 <meta name="color-scheme" content="light dark">
 <meta property="og:title" content="TypeWrite by Jericho">
 <meta property="og:description" content="A typewriter in your browser and on your iPhone. Every key clacks.">
@@ -18,9 +18,11 @@
   /* Typewriter faces: for the page and the wordmark only. The controls use the system face. */
   @font-face { font-family: "Courier Prime"; src: url("TypeWrite/Resources/Fonts/CourierPrime-Regular.ttf") format("truetype"); font-display: block; }
   @font-face { font-family: "Special Elite"; src: url("TypeWrite/Resources/Fonts/SpecialElite-Regular.ttf") format("truetype"); font-display: block; }
+  @font-face { font-family: "Cutive Mono"; src: url("TypeWrite/Resources/Fonts/CutiveMono-Regular.ttf") format("truetype"); font-display: block; }
+  @font-face { font-family: "Lekton"; src: url("TypeWrite/Resources/Fonts/Lekton-Regular.ttf") format("truetype"); font-display: block; }
 
   :root {
-    --desk: #161514;
+    --desk: #E7E1CF;   /* the morning mist, until the painted view is up */
     /* Chrome that floats over the page: near-neutral light surfaces and dark words. */
     --surface: #F2F1EE; --raised: #E6E4DF; --rule: #DAD7D0; --control: #C9C5BC;
     --text: #23211E; --muted: #55504A; --faint: #6A645B;
@@ -69,7 +71,7 @@
   .hud-side.on-desk { color: var(--hud-on-desk); }
   .hud > * { pointer-events: auto; }
   .hud-right { display: flex; align-items: center; gap: 2px; }
-  .hud-btn { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 999px; background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer;
+  .hud-btn { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 999px; background: transparent; display: grid; place-items: center; cursor: pointer;
              transition: background-color .15s, transform .14s var(--ease-out); }
   .hud-btn:hover { background: rgba(35, 33, 30, .07); }
   .on-desk .hud-btn:hover, .hud-btn.on-desk:hover { background: rgba(255, 255, 255, .09); }
@@ -82,6 +84,16 @@
   .dock { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; gap: 2px; padding: 6px;
           border-radius: 999px; background: var(--surface); border: 1px solid rgba(35, 33, 30, .08); box-shadow: 0 6px 18px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .08);
           transform: translateX(-50%); transition: transform .42s var(--ease-out), opacity .3s, visibility 0s; }
+  .editbar { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 6; display: flex; align-items: center; gap: 2px; padding: 6px;
+             border-radius: 999px; background: var(--surface); border: 1px solid rgba(35, 33, 30, .08); box-shadow: 0 6px 18px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .08);
+             transform: translate(-50%, 14px); opacity: 0; visibility: hidden; transition: transform .3s var(--ease-out), opacity .2s, visibility 0s .3s; }
+  body.selecting .editbar { transform: translateX(-50%); opacity: 1; visibility: visible; transition: transform .42s var(--ease-out), opacity .2s, visibility 0s; }
+  body.selecting .dock { opacity: 0; visibility: hidden; }
+  .edit-btn { height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--text); font: 500 14px/20px var(--ui);
+              white-space: nowrap; cursor: pointer; transition: background-color .15s; }
+  .edit-btn:hover:not(:disabled) { background: var(--raised); }
+  .edit-btn:disabled { color: var(--faint); opacity: .55; cursor: default; }
+  #stage { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   body.typing .dock { transform: translate(-50%, calc(100% + 40px)); opacity: 0; visibility: hidden;
                       transition: transform .28s cubic-bezier(.4, 0, .7, .2), opacity .2s, visibility 0s .28s; }
   .dock-btn { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 999px; background: transparent; color: var(--text); display: grid; place-items: center; cursor: pointer;
@@ -160,6 +172,18 @@
   .row-btn { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-top: 14px; border: 1px solid var(--rule); border-radius: var(--r-tile);
              background: transparent; color: var(--text); text-align: left; cursor: pointer; transition: background-color .15s; }
   .row-btn:hover { background: var(--raised); }
+  .row-btn.danger { color: var(--alarm); }
+  .row-btn.danger.armed { background: var(--alarm); border-color: var(--alarm); color: #fff; }
+  .row-btn.danger.armed small { color: rgba(255, 255, 255, .86); }
+  .field { width: 100%; height: 44px; box-sizing: border-box; padding: 0 14px; border: 1px solid var(--rule); border-radius: var(--r-tile); background: #FBFAF8;
+           color: var(--text); font: 15px/20px var(--ui); outline: none; }
+  .field:focus-visible { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(160, 106, 28, .18); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; border-radius: 999px; background: var(--raised); }
+  .seg-btn { height: 36px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 500 14px/20px var(--ui);
+             display: grid; place-items: center; cursor: pointer; transition: background-color .15s, color .15s; }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn[aria-checked="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+  .seg-btn .i { width: 20px; height: 20px; }
   .row-btn span { flex: 1; }
   .row-btn small { display: block; font-size: 12px; line-height: 16px; color: var(--faint); }
 
@@ -238,6 +262,9 @@
   <button class="dock-btn" id="faceKey" type="button" aria-label="Typeface" title="Typeface" aria-haspopup="dialog" aria-controls="facePanel" aria-expanded="false">
     <svg class="i" viewBox="0 0 24 24"><path d="M7 9V5.5A1.5 1.5 0 0 1 8.5 4h7A1.5 1.5 0 0 1 17 5.5V9"/><rect x="3" y="9" width="18" height="11" rx="2"/><path d="M7 13h.01M10 13h.01M14 13h.01M17 13h.01M8 16.5h8"/></svg>
   </button>
+  <button class="dock-btn" id="titleKey" type="button" aria-label="Title" title="Title" aria-haspopup="dialog" aria-controls="titlePanel" aria-expanded="false">
+    <svg class="i" viewBox="0 0 24 24"><path d="M5 6.5V5h14v1.5M12 5v10M9.5 15h5M6 19h12"/></svg>
+  </button>
   <button class="dock-btn" id="flowerKey" type="button" aria-label="Pressed flower" title="Pressed flower" aria-haspopup="dialog" aria-controls="flowerPanel" aria-expanded="false">
     <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="9" r="2"/><path d="M12 7a2.5 2.5 0 1 1 2.4-3.2A2.5 2.5 0 1 1 15.6 9a2.5 2.5 0 1 1-1.4 3.9A2.5 2.5 0 1 1 9.8 12.9 2.5 2.5 0 1 1 8.4 9a2.5 2.5 0 1 1 1.2-5.2A2.5 2.5 0 0 1 12 7"/><path d="M12 13v8M12 18c-2.5 0-4-1.5-4.5-3.5 2 0 3.5.8 4.5 2.4"/></svg>
   </button>
@@ -256,6 +283,15 @@
     <svg class="i off" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>
   </button>
 </nav>
+
+<div class="editbar" id="editBar" role="toolbar" aria-label="Edit the selection">
+  <button class="edit-btn" type="button" data-cmd="copy" data-needs-sel>Copy</button>
+  <button class="edit-btn" type="button" data-cmd="cut" data-needs-sel>Cut</button>
+  <button class="edit-btn" type="button" data-cmd="delete" data-needs-sel>Delete</button>
+  <span class="dock-rule" aria-hidden="true"></span>
+  <button class="edit-btn" type="button" data-cmd="paste">Paste</button>
+  <button class="edit-btn" type="button" data-cmd="all">Select all</button>
+</div>
 
 <div class="scrim" id="scrim"></div>
 
@@ -288,6 +324,10 @@
       <svg class="i" viewBox="0 0 24 24"><rect x="7" y="2.75" width="10" height="18.5" rx="2.5"/><path d="M11 18h2"/></svg>
       <span>TypeWrite for Mac and iPhone<small>The native app, installed with one line</small></span>
       <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <button class="row-btn danger" id="resetRow" type="button">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg>
+      <span><span id="resetLabel">Reset everything</span><small id="resetHint">Erases every sheet and setting in this browser</small></span>
     </button>
   </div>
 </section>
@@ -323,7 +363,18 @@
 
 <section class="panel" id="facePanel" role="dialog" aria-labelledby="faceTitle" tabindex="-1" hidden>
   <div class="drag"><div class="grabber"></div><header><h2 id="faceTitle">Typeface</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
-  <div class="panel-body"><div class="tiles two" id="faceTiles" role="radiogroup" aria-labelledby="faceTitle"></div></div>
+  <div class="panel-body"><div class="tiles two" id="faceTiles" role="radiogroup" aria-labelledby="faceTitle"></div>
+    <div class="group"><p class="label" id="sizeLabel">Size</p><div class="seg" id="sizeSeg" role="radiogroup" aria-labelledby="sizeLabel"></div></div>
+    <div class="group"><p class="label" id="alignLabel">Align</p><div class="seg" id="alignSeg" role="radiogroup" aria-labelledby="alignLabel"></div></div>
+    <p class="note">Bigger type fits fewer letters on a line, like a wider pitch.</p></div>
+</section>
+
+<section class="panel" id="titlePanel" role="dialog" aria-labelledby="titleTitle" tabindex="-1" hidden>
+  <div class="drag"><div class="grabber"></div><header><h2 id="titleTitle">Title</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
+  <div class="panel-body">
+    <input class="field" id="titleField" type="text" maxlength="48" placeholder="A title for this sheet" autocomplete="off" aria-labelledby="titleTitle">
+    <p class="note">Typed at the top of the sheet, centred and a size up. It also names the sheet and its downloads.</p>
+  </div>
 </section>
 
 <section class="panel" id="flowerPanel" role="dialog" aria-labelledby="flowerTitle" tabindex="-1" hidden>
@@ -355,8 +406,22 @@
    ============================================================ */
 
 // ---------- Metrics (the fixed pitch of the machine) ----------
-const COLS = 30, ADV = 10.2, LH = 26, SIDE = 26, TOP = 70, TOP_FLOWER = 138, BELL_COL = COLS - 6, MAX_CHARS = 40000;
-const PAPER_W = COLS * ADV + SIDE * 2;
+const SIDE = 26, TOP = 70, TOP_FLOWER = 138, MAX_CHARS = 40000, PAPER_W = 358;
+// Type size is the machine's pitch: the line stays 306 pt wide, so bigger type means fewer, wider columns.
+const SIZES = [{ id: "small", name: "Small", cols: 36 }, { id: "medium", name: "Medium", cols: 30 }, { id: "large", name: "Large", cols: 24 }];
+const ALIGNS = [{ id: "left", name: "Left", k: 0 }, { id: "center", name: "Centre", k: 0.5 }, { id: "right", name: "Right", k: 1 }];
+let COLS = 30, ADV = 10.2, LH = 26, BELL_COL = 24, TYPE_K = 1;
+function useMetrics(s) {
+  if (!s.size) s.size = "medium";
+  if (!s.align) s.align = "left";
+  COLS = (SIZES.find(z => z.id === s.size) || SIZES[1]).cols;
+  ADV = (PAPER_W - SIDE * 2) / COLS; TYPE_K = ADV / 10.2; LH = 26 * TYPE_K; BELL_COL = COLS - 6;
+}
+// How far a line moves right, in columns, to sit left, centred or right.
+function lineShift(s, line) {
+  const k = (ALIGNS.find(a => a.id === s.align) || ALIGNS[0]).k;
+  return k ? (COLS - Math.min(line.glyphs.length, COLS)) * k : 0;
+}
 
 // grain: mottling and tooth; age: yellowing, browned edges and foxing; laid: laid and chain lines; fibre: visible fibres.
 const PAPERS = [
@@ -374,6 +439,8 @@ const INKS = [
 const FACES = [
   { id: "courier", name: "Pica", family: "Courier Prime", size: 17 },
   { id: "elite", name: "Elite", family: "Special Elite", size: 15.5 },
+  { id: "office", name: "Office", family: "Cutive Mono", size: 16.8 },
+  { id: "gothic", name: "Gothic", family: "Lekton", size: 16.5 },
 ];
 const FLOWERS = [
   { id: "none", name: "None" }, { id: "marigold", name: "Marigold" }, { id: "rose", name: "Rose" },
@@ -423,13 +490,13 @@ function emptyLayout() { return { lines: [{ glyphs: [], ret: false }], line: 0, 
 // Appends one character and reports how the carriage moved.
 function strikeInto(L, ch, index) {
   if (ch === "\n") {
-    L.lines[L.lines.length - 1].ret = true;
+    L.lines[L.lines.length - 1].ret = true; L.lines[L.lines.length - 1].end = index;   // end: the character a line break used up
     L.lines.push({ glyphs: [], ret: false }); L.line = L.lines.length - 1; L.col = 0;
     return "returned";
   }
   let move = "advanced";
   if (L.col >= COLS) {
-    if (ch === " ") { L.lines.push({ glyphs: [], ret: false }); L.line = L.lines.length - 1; L.col = 0; return "wrappedOnSpace"; }
+    if (ch === " ") { L.lines[L.lines.length - 1].end = index; L.lines.push({ glyphs: [], ret: false }); L.line = L.lines.length - 1; L.col = 0; return "wrappedOnSpace"; }
     const g = L.lines[L.lines.length - 1].glyphs;
     let space = -1;
     for (let i = g.length - 1; i >= 0; i--) if (g[i].ch === " ") { space = i; break; }
@@ -489,7 +556,8 @@ const newSeed = () => 1 + Math.floor(Math.random() * 2147483646);
 function newSheet() {
   const d = store.get("tw.defaults", {});
   return { id: "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: "", created: Date.now(), updated: Date.now(),
-           paper: d.paper || "cream", ink: d.ink || "black", face: d.face || "courier", flower: d.flower || "none", seed: newSeed() };
+           paper: d.paper || "cream", ink: d.ink || "black", face: d.face || "courier", flower: d.flower || "none",
+           size: d.size || "medium", align: d.align || "left", seed: newSeed() };
 }
 function readSheets() {
   const v = store.get("tw.sheets", []);
@@ -508,13 +576,14 @@ let sheets = readSheets();
 let sheet = sheets.find(s => s.id === store.get("tw.current", "")) || null;
 let fresh = false;
 if (!sheet) { sheet = newSheet(); fresh = true; }
+useMetrics(sheet);
 let typist = new Typist(sheet.text);
 let saveTimer = 0;
 function persist(now) {
   clearTimeout(saveTimer);
   const write = () => {
-    sheets = mergeSheets(readSheets(), sheets).filter(s => s.id !== sheet.id && s.text.trim());
-    if (sheet.text.trim()) sheets.unshift(sheet);
+    sheets = mergeSheets(readSheets(), sheets).filter(s => s.id !== sheet.id && filled(s));
+    if (filled(sheet)) sheets.unshift(sheet);
     store.set("tw.sheets", sheets); store.set("tw.current", sheet.id);
   };
   if (now) write(); else saveTimer = setTimeout(write, 400);
@@ -718,7 +787,17 @@ function strikeFor(seed, index) {
   if (!s) { s = inkStrike(seed, index); strikeCache.set(key, s); if (strikeCache.size > 120000) strikeCache.clear(); }
   return s;
 }
-function topMargin(s) { return s.flower === "none" ? TOP : TOP_FLOWER; }
+const TITLE_GAP = 46;                               // a title takes about two lines above the first one
+const filled = s => !!(s.text.trim() || (s.title || "").trim());
+function topMargin(s) { return (s.flower === "none" ? TOP : TOP_FLOWER) + ((s.title || "").trim() ? TITLE_GAP : 0); }
+// The title: centred at the top, a size up, shrinking to fit when it is long. Seeded like the letters below it.
+function titleLayout(s, face) {
+  const chars = graphemes((s.title || "").trim());
+  if (!chars.length) return null;
+  const width = PAPER_W - SIDE * 2, adv = Math.min(10.2 * 1.6, width / chars.length), x0 = SIDE + (width - adv * chars.length) / 2;
+  return { base: s.flower === "none" ? TOP : TOP_FLOWER, fs: face.size * adv / 10.2, adv,
+           glyphs: chars.map((ch, i) => ({ ch, index: -1 - i, x: x0 + (i + 0.5) * adv })) };
+}
 // g: context already scaled to sheet points. view: visible height in sheet points.
 function drawSheet(g, s, L, ox, oy, paperH, viewW, viewH, shadow) {
   const paper = byId(PAPERS, s.paper), ink = byId(INKS, s.ink), face = byId(FACES, s.face);
@@ -744,19 +823,31 @@ function drawSheet(g, s, L, ox, oy, paperH, viewW, viewH, shadow) {
 
   const first = Math.max(0, Math.floor((-LH * 2 - (oy + topMargin(s))) / LH));
   const last = Math.min(L.lines.length - 1, Math.floor((viewH + LH * 2 - (oy + topMargin(s))) / LH));
-  g.font = `${face.size}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = ink.color;
+  g.font = `${face.size * TYPE_K}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = ink.color;
   const left = ox + SIDE;
   for (let li = first; li <= last; li++) {
-    const base = oy + topMargin(s) + li * LH;
+    const base = oy + topMargin(s) + li * LH, shift = lineShift(s, L.lines[li]);
     for (const gl of L.lines[li].glyphs) {
       if (gl.ch === " ") continue;
-      const k = strikeFor(s.seed, gl.index), cx = left + (gl.col + 0.5) * ADV;
+      const k = strikeFor(s.seed, gl.index), cx = left + (gl.col + 0.5 + shift) * ADV;
       g.save(); g.translate(cx + k.dx, base + k.dy); g.rotate(k.rot);
       g.globalAlpha = k.bleed; g.fillText(gl.ch, 0.45, 0.2);
       g.globalAlpha = k.opacity; g.fillText(gl.ch, 0, 0);
       g.restore();
     }
   }
+  const t = titleLayout(s, face);
+  if (t) {
+    g.font = `${t.fs}px "${face.family}"`;
+    for (const q of t.glyphs) {
+      if (q.ch === " ") continue;
+      const k = strikeFor(s.seed, q.index);
+      g.save(); g.translate(ox + q.x + k.dx, oy + t.base + k.dy); g.rotate(k.rot);
+      g.globalAlpha = k.bleed; g.fillText(q.ch, 0.45, 0.2); g.globalAlpha = k.opacity; g.fillText(q.ch, 0, 0);
+      g.restore();
+    }
+  }
+  g.globalAlpha = 1;
 }
 function sheetHeight(s, L) { return Math.max(topMargin(s) + L.lines.length * LH + 70, PAPER_W * 1.294); }
 
@@ -782,36 +873,42 @@ function glyphLook(seed, index, ch) {
 }
 const COUNTERS = "aeobdgpqABDOPQR04689&@";
 // Draws ink as data for the paper shader: alpha is the letter's shape, green is how hard it struck.
+const inkTone = v => `rgb(255,${Math.round(Math.max(0, Math.min(1, v)) * 255)},0)`;
+// One strike as data for the shader: alpha is the letter's shape, green is how hard it struck.
+function inkGlyph(g, seed, ch, index, cx, base, fs, adv) {
+  const k = glyphLook(seed, index, ch);
+  g.save(); g.translate(cx + k.dx, base + k.dy); g.rotate(k.rot);
+  if (k.ghost) { g.fillStyle = inkTone(k.strength * 0.32); g.fillText(ch, 0.7, -0.45); }
+  const ux = Math.cos(k.angle) * adv * 0.55, uy = Math.sin(k.angle) * adv * 0.55 - fs * 0.3;
+  const grad = g.createLinearGradient(-ux, -fs * 0.3 - uy, ux, -fs * 0.3 + uy);
+  grad.addColorStop(0, inkTone(k.strength * (1 - k.tilt)));
+  grad.addColorStop(1, inkTone(k.strength));
+  g.fillStyle = grad; g.fillText(ch, 0, 0);
+  if (k.clog && COUNTERS.includes(ch)) {
+    const upper = ch === ch.toUpperCase() && !"04689&".includes(ch);
+    g.fillStyle = inkTone(k.strength * 0.85); g.beginPath();
+    g.ellipse(0, -fs * (upper ? 0.42 : 0.24), fs * 0.13, fs * (upper ? 0.16 : 0.1), 0, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+}
 function drawInk(g, s, L, top, h) {
-  const face = byId(FACES, s.face), tm = topMargin(s);
+  const face = byId(FACES, s.face), tm = topMargin(s), fs = face.size * TYPE_K;
   const first = Math.max(0, Math.floor((top - tm - LH) / LH)), last = Math.min(L.lines.length - 1, Math.ceil((top + h - tm + LH) / LH));
-  g.font = `${face.size}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic";
-  const tone = v => `rgb(255,${Math.round(Math.max(0, Math.min(1, v)) * 255)},0)`;
+  g.font = `${fs}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic";
   for (let li = first; li <= last; li++) {
-    const base = tm + li * LH;
-    for (const gl of L.lines[li].glyphs) {
-      if (gl.ch === " ") continue;
-      const k = glyphLook(s.seed, gl.index, gl.ch), cx = SIDE + (gl.col + 0.5) * ADV;
-      g.save(); g.translate(cx + k.dx, base + k.dy); g.rotate(k.rot);
-      if (k.ghost) { g.fillStyle = tone(k.strength * 0.32); g.fillText(gl.ch, 0.7, -0.45); }
-      const ux = Math.cos(k.angle) * ADV * 0.55, uy = Math.sin(k.angle) * ADV * 0.55 - face.size * 0.3;
-      const grad = g.createLinearGradient(-ux, -face.size * 0.3 - uy, ux, -face.size * 0.3 + uy);
-      grad.addColorStop(0, tone(k.strength * (1 - k.tilt)));
-      grad.addColorStop(1, tone(k.strength));
-      g.fillStyle = grad; g.fillText(gl.ch, 0, 0);
-      if (k.clog && COUNTERS.includes(gl.ch)) {
-        const upper = gl.ch === gl.ch.toUpperCase() && !"04689&".includes(gl.ch);
-        g.fillStyle = tone(k.strength * 0.85); g.beginPath();
-        g.ellipse(0, -face.size * (upper ? 0.42 : 0.24), face.size * 0.13, face.size * (upper ? 0.16 : 0.1), 0, 0, Math.PI * 2); g.fill();
-      }
-      g.restore();
-    }
+    const base = tm + li * LH, shift = lineShift(s, L.lines[li]);
+    for (const gl of L.lines[li].glyphs) if (gl.ch !== " ") inkGlyph(g, s.seed, gl.ch, gl.index, SIDE + (gl.col + 0.5 + shift) * ADV, base, fs, ADV);
+  }
+  const t = titleLayout(s, face);
+  if (t && t.base + 20 > top && t.base - 40 < top + h) {
+    g.font = `${t.fs}px "${face.family}"`;
+    for (const q of t.glyphs) if (q.ch !== " ") inkGlyph(g, s.seed, q.ch, q.index, q.x, t.base, t.fs, t.adv);
   }
 }
 
 // ---------- The machine ----------
 const $ = sel => document.querySelector(sel);
-const stage = $("#stage"), keys = $("#keys"), hud = $("#hud"), ghost = $("#ghost");
+const stage = $("#stage"), keys = $("#keys"), hud = $("#hud"), ghost = $("#ghost"), titleField = $("#titleField");
 const hudSides = [...document.querySelectorAll(".hud-side")];
 // The first-line prompt is part of the page: tapping it starts the machine like tapping the paper.
 ghost.addEventListener("pointerdown", e => {
@@ -850,7 +947,7 @@ function toScreen(x, y) {
 }
 function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
 function setFeel(names, resp, damp) { for (const n of names) { spring[n].resp = resp; spring[n].damp = damp; } }
-function caretX() { return SIDE + (Math.min(typist.layout.col, COLS) + 0.5) * ADV; }
+function caretX() { const L = typist.layout; return SIDE + (Math.min(L.col, COLS) + 0.5 + lineShift(sheet, L.lines[L.line])) * ADV; }
 function viewportH() { const vv = window.visualViewport; return vv ? vv.height + vv.offsetTop : innerHeight; }
 // The type line sits as low as the machine allows: room under it for the rod, the guide and the dock.
 function strikeLine() {
@@ -904,7 +1001,7 @@ function frame(t) {
   else requestAnimationFrame(frame);
 }
 function resize() {
-  W = innerWidth; H = innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 3);
   zoom = PAPER_SHARE * W / PAPER_W;
   if (GL) GL.resize(); else resize2D();
   forgetHudBoxes(); retarget(true); kick();
@@ -917,7 +1014,7 @@ function draw() {
   for (const el of hudSides) {
     if (!el.box) el.box = el.getBoundingClientRect();
     const cx = el.box.left + el.box.width / 2, cy = el.box.top + el.box.height / 2;
-    el.classList.toggle("on-desk", spring.lamp.v > 0.5 || cy < paperTop || cx < left + 6 || cx > right - 6);
+    el.classList.toggle("on-desk", spring.lamp.v > 0.5);   // dark icons on the day sky, light ones at night
   }
   placeGhost();
 }
@@ -925,15 +1022,16 @@ function placeGhost() {
   const blank = !typist.chars.length;
   ghost.hidden = !blank;
   if (!blank) return;
-  const face = byId(FACES, sheet.face), [startX, base] = toScreen(SIDE - PAPER_W / 2, spring.y.v);
+  const face = byId(FACES, sheet.face), k = (ALIGNS.find(a => a.id === sheet.align) || ALIGNS[0]).k;
+  const [startX, base] = toScreen(SIDE - PAPER_W / 2 + k * (PAPER_W - SIDE * 2), spring.y.v);
   const ask = $("#ghostAsk"), start = $("#ghostStart");
   ask.hidden = typing;
   ask.textContent = finePointer() ? "No first line yet? Just start typing." : "No first line yet? Tap the page.";
   ask.style.fontSize = Math.max(12, face.size * 0.46 * zoom) + "px";
   ask.style.left = W / 2 + "px"; ask.style.top = (base - LH * 1.35 * zoom) + "px";
   start.style.fontFamily = `"${face.family}", var(--mono)`;
-  start.style.fontSize = face.size * zoom + "px";
-  start.style.left = startX + "px"; start.style.top = base + "px";
+  start.style.fontSize = face.size * TYPE_K * zoom + "px";
+  start.style.left = startX + "px"; start.style.top = base + "px"; start.style.translate = `${-k * 100}% 0`;
   start.style.opacity = typing ? "0.55" : "1";
 }
 
@@ -985,6 +1083,9 @@ uniform sampler2D uFlower; uniform vec4 uFlowerRect; uniform float uFlowerOn;
 uniform float uLamp; uniform vec3 uLampPos; uniform float uLampReach;
 uniform float uPxPerPt; uniform vec2 uView;
 uniform float uRodY, uRodR, uCaretX;
+uniform vec4 uGrid;     // top margin, line height, side margin, column width (points)
+uniform vec4 uSel;      // selection: first line, first column, last line, end column; x < 0 when nothing is selected
+uniform vec2 uSelShift; // how far the first and last selected lines are shifted by the alignment, in columns
 varying vec2 vSheet; varying vec3 vWorld; varying vec3 vNormal; varying float vCurl; varying float vRoll;
 
 float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -1052,6 +1153,15 @@ void main() {
   float inkAmt = cov * strength * mix(1.0, weave, 0.85 * weaveOn);
   inkAmt = max(inkAmt, halo * 0.11 * strength);
   inkAmt *= (0.9 + 0.1 * tooth) * inside;
+  // ---- A selection: a soft blue wash behind the chosen letters, under the ink ----
+  if (uSel.x >= 0.0 && uFlat < 0.5) {
+    float sl = floor((s.y - uGrid.x) / uGrid.y + 0.74), sc = (s.x - uGrid.z) / uGrid.w;
+    float inLine = step(0.0, sc) * step(sc, (uPaperW - 2.0 * uGrid.z) / uGrid.w);
+    float picked = step(uSel.x, sl) * step(sl, uSel.z) * inLine
+                 * (sl > uSel.x ? 1.0 : step(uSel.y, sc - uSelShift.x))
+                 * (sl < uSel.z ? 1.0 : step(sc - uSelShift.y, uSel.w));
+    col = mix(col, col * vec3(0.7, 0.82, 1.0), picked);
+  }
   col = mix(col, uInkCol, clamp(inkAmt, 0.0, 1.0) * 0.95);
 
   // ---- The pressed flower: dyes soaked into the sheet, and a faint stain around it ----
@@ -1094,6 +1204,686 @@ void main() {
 }`;
 const hex3 = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 
+// ---------- The view: a painted sky and land behind the machine, sunrise by day, moonlit with the lamp on ----------
+// painting(px, res): px from the top-left in device pixels. uRollerY: where the roller begins. uNight: 0 day, 1 night.
+const PAINT_GLSL = `
+#ifndef SSAA
+#define SSAA 1            // 1: 4x rotated-grid supersampling, 0: one sample per pixel
+#endif
+#ifndef SSAA_ADAPTIVE
+#define SSAA_ADAPTIVE 1   // 1: only supersample 2x2 quads with visible contrast
+#endif
+#ifndef SSAA_THRESHOLD
+#define SSAA_THRESHOLD 0.035
+#endif
+
+uniform float uRollerY;
+uniform float uNight;
+
+// ---------------------------------------------------------------- palette ---
+const vec3 C_ZENITH  = vec3(0.749, 0.796, 0.796); // #BFCBCB
+const vec3 C_CREAM   = vec3(0.949, 0.894, 0.776); // #F2E4C6
+const vec3 C_PEACH   = vec3(0.965, 0.835, 0.604); // #F6D59A
+const vec3 C_SUN     = vec3(1.000, 0.969, 0.890); // #FFF7E3
+const vec3 C_CLOUDHI = vec3(0.984, 0.941, 0.847); // #FBF0D8
+const vec3 C_CLOUDSH = vec3(0.722, 0.702, 0.765); // #B8B3C3
+const vec3 C_FAR     = vec3(0.682, 0.714, 0.635); // #AEB6A2
+const vec3 C_MID     = vec3(0.557, 0.604, 0.424); // #8E9A6C
+const vec3 C_MEADOW1 = vec3(0.784, 0.749, 0.475); // #C8BF79
+const vec3 C_MEADOW2 = vec3(0.655, 0.651, 0.369); // #A7A65E
+const vec3 C_YELLOW  = vec3(0.953, 0.769, 0.263); // #F3C443
+const vec3 C_ORANGE  = vec3(0.933, 0.604, 0.298); // #EE9A4C
+const vec3 C_WHITE   = vec3(1.000, 0.961, 0.875); // #FFF5DF
+const vec3 C_MIST    = vec3(0.969, 0.941, 0.886); // #F7F0E2
+
+// ------------------------------------------------------------ hash / noise --
+float h11(float p) { p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
+float h12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+vec3 h32(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yxz + 33.33);
+  return fract((p3.xxy + p3.yzz) * p3.zyx);
+}
+float vn(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = h12(i);
+  float b = h12(i + vec2(1.0, 0.0));
+  float c = h12(i + vec2(0.0, 1.0));
+  float d = h12(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float vn1(float x) {
+  float i = floor(x);
+  float f = x - i;
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(h11(i), h11(i + 1.0), f);
+}
+float fbm1(float x) {
+  float s = 0.5 * vn1(x); x = x * 2.07 + 1.3;
+  s += 0.25 * vn1(x);     x = x * 2.11 + 4.7;
+  s += 0.125 * vn1(x);
+  return s / 0.875;
+}
+
+// directional brush texture: long along dir, narrow across. Returns ~[0,1].
+float brush(vec2 p, vec2 dir, float len, float wid) {
+  vec2 q = vec2(dot(p, dir), dot(p, vec2(-dir.y, dir.x)));
+  return vn(vec2(q.x / len, q.y / wid));
+}
+// turn a smooth value into soft painted tonal steps whose borders wander with n
+float bands(float v, float n, float levels, float soft) {
+  float x = v * levels + (n - 0.5) * 0.9;
+  float i = floor(x);
+  float f = x - i;
+  return (i + smoothstep(0.5 - soft, 0.5 + soft, f)) / levels;
+}
+
+// ------------------------------------------------------------ time of day --
+// everything below depends on uNight only through these per-pixel globals
+float gHalfW, gHor, gRoll;
+vec2  gSun, gSunDay, gMoon;
+vec4  gW;                         // keyframe weights: day, sunset, dusk, night
+float gSet, gNight, gMoonVis, gSunVis, gLightMix, gLightUp;
+vec3  gZen, gMidSky, gHorSky, gGlowC, gCoreC, gTwiC;
+float gGlowAmt, gTwiAmt, gBloomAmt, gCoreAmt;
+vec3  gCSh, gCMid, gCLit, gRim;
+float gRimAmt, gNearWarm, gCloudK, gChroma, gRimW;
+vec3  gFarG, gNearG;              // land grade (far / near), weighted by non-day keys
+
+vec3  tod(vec3 a, vec3 b, vec3 c, vec3 d) { return a * gW.x + b * gW.y + c * gW.z + d * gW.w; }
+float todf(vec4 v) { return dot(v, gW); }
+
+void setupScene(vec2 res) {
+  float H = res.y;
+  gHalfW = 0.5 * res.x / H;
+  gRoll = (uRollerY > 1.0 ? uRollerY : 0.7 * H) / H;
+  gHor = gRoll - 0.22;
+  float u = clamp(uNight, 0.0, 1.0);
+  float ka = smoothstep(0.0, 0.35, u), kb = smoothstep(0.35, 0.62, u), kc = smoothstep(0.62, 1.0, u);
+  gW = vec4(1.0 - ka, ka - kb, kb - kc, kc);
+
+  // the sun swings along an arc, down and to the right, behind the far hills
+  gSunDay = vec2(0.0, clamp(gHor - 0.10, 0.30, 0.40));
+  gSet = pow(clamp(u * 2.0, 0.0, 1.0), 1.3);       // touches the hills around 0.35
+  float ph = gSet * 1.5708;
+  vec2 s1 = vec2(min(0.30, gHalfW * 0.6), gHor + 0.05);
+  gSun = vec2(s1.x * sin(ph), gSunDay.y + (s1.y - gSunDay.y) * (1.0 - cos(ph)));
+  gSunVis = 1.0 - smoothstep(0.42, 0.56, u);
+  // the moon rises on the opposite side
+  float mr = smoothstep(0.42, 1.0, u);
+  float pm = mr * 1.5708;
+  vec2 m0 = vec2(-min(0.34, gHalfW * 0.62), gHor + 0.06);
+  vec2 m1 = vec2(-min(0.22, gHalfW * 0.25), mix(0.29, 0.22, smoothstep(0.2, 0.9, gHalfW)));
+  gMoon = vec2(m0.x + (m1.x - m0.x) * (1.0 - cos(pm)), m0.y + (m1.y - m0.y) * sin(pm));
+  gMoonVis = smoothstep(0.45, 0.75, u);
+  gNight = smoothstep(0.55, 0.95, u);
+  gLightMix = smoothstep(0.52, 0.72, u);            // cloud key light: sun -> moon
+  gLightUp = todf(vec4(-0.8, 0.15, 0.0, -0.5));     // sunset light comes from below
+
+  //                day                      sunset                  dusk                    night
+  gZen    = tod(C_ZENITH,               vec3(0.46, 0.50, 0.70), vec3(0.20, 0.21, 0.41), vec3(0.118, 0.133, 0.275));
+  gMidSky = tod(C_CREAM,                vec3(0.90, 0.66, 0.64), vec3(0.40, 0.31, 0.50), vec3(0.17, 0.17, 0.34));
+  gHorSky = tod(C_PEACH,                vec3(0.99, 0.62, 0.38), vec3(0.66, 0.40, 0.47), vec3(0.227, 0.208, 0.40));
+  gGlowC  = tod(vec3(0.99, 0.80, 0.52), vec3(1.0, 0.52, 0.24),  vec3(0.92, 0.42, 0.30), vec3(0.50, 0.40, 0.48));
+  gCoreC  = tod(C_SUN,                  vec3(1.0, 0.84, 0.56),  vec3(1.0, 0.70, 0.45),  vec3(1.0, 0.70, 0.45));
+  gTwiC   = tod(C_PEACH,                vec3(1.0, 0.50, 0.26),  vec3(0.88, 0.40, 0.32), vec3(0.36, 0.26, 0.42));
+  gGlowAmt  = todf(vec4(0.70, 0.62, 0.40, 0.0));
+  gTwiAmt   = todf(vec4(0.0, 0.62, 0.75, 0.20));
+  gBloomAmt = todf(vec4(0.20, 0.22, 0.10, 0.0));
+  gCoreAmt  = todf(vec4(0.45, 0.40, 0.0, 0.0));
+
+  gCSh  = tod(C_CLOUDSH,              vec3(0.52, 0.45, 0.60), vec3(0.28, 0.26, 0.42), vec3(0.10, 0.115, 0.20));
+  gCMid = tod(vec3(0.91, 0.86, 0.82), vec3(0.86, 0.60, 0.60), vec3(0.44, 0.34, 0.50), vec3(0.155, 0.175, 0.27));
+  gCLit = tod(C_CLOUDHI,              vec3(1.0, 0.74, 0.52),  vec3(0.70, 0.46, 0.52), vec3(0.27, 0.31, 0.43));
+  gCloudK = todf(vec4(1.0, 1.0, 0.85, 0.5));
+  gRimW   = todf(vec4(0.03, 0.03, 0.022, 0.012));
+  gRim  = tod(vec3(1.0, 0.96, 0.84),  vec3(1.0, 0.60, 0.30),  vec3(0.98, 0.52, 0.42), vec3(0.80, 0.87, 1.0));
+  gRimAmt   = todf(vec4(0.45, 0.95, 0.60, 0.85));
+  gNearWarm = todf(vec4(0.8, 1.0, 0.6, 0.0));
+
+  gFarG  = vec3(0.84, 0.58, 0.54) * gW.y + vec3(0.42, 0.33, 0.48) * gW.z + vec3(0.19, 0.23, 0.33) * gW.w;
+  gNearG = vec3(0.24, 0.18, 0.24) * gW.y + vec3(0.13, 0.13, 0.19) * gW.z + vec3(0.065, 0.11, 0.125) * gW.w;
+  gChroma = todf(vec4(0.0, 0.40, 0.18, 0.14));
+}
+
+// re-light a day colour for sunset / dusk / night. d: 0 far .. 1 near
+vec3 grade(vec3 c, float d) {
+  float L = dot(c, vec3(0.30, 0.55, 0.15));
+  vec3 g = mix(gFarG, gNearG, d) * (0.62 + 0.9 * (L - 0.55));
+  return c * gW.x + g + (c - L) * gChroma;
+}
+
+// ------------------------------------------------------------------- clouds --
+// a cloud mass blob in edge-relative coords e = (distance from side edge, y).
+// returns (mass, base y)
+vec2 blob(vec2 e, vec2 ctr, vec2 rad, float base) {
+  vec2 q = (e - ctr) / rad;
+  float m = 1.0 - length(q);
+  m = min(m, (base - e.y) * 6.0);
+  return vec2(m, base);
+}
+vec2 pickMax(vec2 a, vec2 b) { return a.x > b.x ? a : b; }
+
+// where cumulus billows may live (x > 0 inside), and the local cloud base
+vec2 cloudMass(vec2 c) {
+  float ex = gHalfW - abs(c.x);
+  vec2 e = vec2(ex, c.y);
+  vec2 m;
+  float wv = smoothstep(0.2, 0.9, gHalfW);
+  if (c.x < 0.0) {
+    m = blob(e, vec2(0.0 + 0.10 * wv, 0.19), vec2(0.15 + 0.22 * wv, 0.20), 0.34);
+    m = pickMax(m, blob(e, vec2(0.18 + 0.2 * wv, gHor - 0.07), vec2(0.16 + 0.12 * wv, 0.065), gHor - 0.03));
+  } else {
+    m = blob(e, vec2(0.01 + 0.11 * wv, 0.14), vec2(0.14 + 0.20 * wv, 0.16), 0.27);
+    m = pickMax(m, blob(e, vec2(0.06 + 0.08 * wv, gHor - 0.09), vec2(0.18 + 0.16 * wv, 0.07), gHor - 0.04));
+  }
+  // keep a window around the (day) sun
+  float ds = length((c - gSunDay) * vec2(1.0, 1.3));
+  m.x = min(m.x, (ds - 0.15) * 4.0);
+  m.x += sin(c.x * 11.0 + sin(c.y * 9.0) * 1.7) * sin(c.y * 14.0 + c.x * 6.0 + 1.0) * 0.17;
+  return m;
+}
+// conservative test: could any billow reach p?
+bool nearCloud(vec2 p) {
+  const float G = 0.10;   // billow reach + warp + soft edge
+  float ex = gHalfW - abs(p.x);
+  vec2 e = vec2(ex, p.y);
+  float wv = smoothstep(0.2, 0.9, gHalfW);
+  float d;
+  if (p.x < 0.0) {
+    d = min(length((e - vec2(0.10 * wv, 0.19)) / vec2(0.15 + 0.22 * wv + G, 0.20 + G)),
+            length((e - vec2(0.18 + 0.2 * wv, gHor - 0.07)) / vec2(0.16 + 0.12 * wv + G, 0.065 + G)));
+  } else {
+    d = min(length((e - vec2(0.01 + 0.11 * wv, 0.14)) / vec2(0.14 + 0.20 * wv + G, 0.16 + G)),
+            length((e - vec2(0.06 + 0.08 * wv, gHor - 0.09)) / vec2(0.18 + 0.16 * wv + G, 0.07 + G)));
+  }
+  return d < 1.0;
+}
+
+float smax(float a, float b, float k) {
+  float h = max(k - abs(a - b), 0.0) / k;
+  return max(a, b) + h * h * k * 0.25;
+}
+
+// union-of-spheres height field. Z = heights at p, p+o1, p+o2 (o toward light)
+void billows(vec2 p, vec2 o1, vec2 o2, float cs, float seed, float mmin, vec3 M, float base,
+             bool castShadow, inout vec3 Z, inout float cov, inout vec3 info) {
+  vec2 id = floor(p / cs);
+  const float K = 0.02;
+  float reach = 0.9 * cs + (castShadow ? 0.026 : 0.01);
+  float reach2 = reach * reach;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 cid = id + vec2(float(i), float(j));
+      vec3 h = h32(cid + seed);
+      vec2 c = (cid + 0.2 + 0.6 * h.xy) * cs;
+      vec2 dc = p - c;
+      if (dot(dc, dc) > reach2) continue;
+      float m = M.x + dot(M.yz, c - p);       // mass from the local linear model
+      if (m <= mmin) continue;
+      float r = cs * (0.62 + 0.28 * h.z) * (0.4 + 0.6 * smoothstep(0.0, 0.4, m));
+      float rr = r * r;
+      float zo = 0.22 * sqrt(clamp(m, 0.0, 1.0)) + 0.25 * (base - c.y);
+      // distant clouds near the horizon are flatter
+      vec2 S = vec2(1.0, 1.0 + 0.45 * smoothstep(gHor - 0.16, gHor - 0.05, c.y));
+      vec2 d0 = dc * S;
+      float l0 = dot(d0, d0);
+      float above = base + 0.012 - p.y;          // flat-ish cloud base
+      cov = max(cov, min(r - sqrt(l0), above));
+      float ir = 1.0 / r;
+      if (l0 < rr && above > 0.0) {
+        float sz = sqrt(rr - l0);
+        float z = sz + zo * smoothstep(0.0, 0.4, sz * ir);
+        if (z > info.z) info = vec3(c, z);
+        Z.x = smax(Z.x, z, K);
+      }
+      vec2 d1 = d0 + o1 * S; float l1 = dot(d1, d1);
+      if (l1 < rr) { float s1 = sqrt(rr - l1); Z.y = smax(Z.y, s1 + zo * smoothstep(0.0, 0.4, s1 * ir), K); }
+      if (castShadow) {
+        vec2 d2 = d0 + o2 * S; float l2 = dot(d2, d2);
+        if (l2 < rr) { float s2 = sqrt(rr - l2); Z.z = smax(Z.z, s2 + zo * smoothstep(0.0, 0.4, s2 * ir), K); }
+      }
+    }
+  }
+}
+
+vec4 clouds(vec2 p) {
+  if (!nearCloud(p)) return vec4(0.0);
+  // fluffy, brushy edges: warp the lookup a little
+  vec2 w = vec2(vn(p * 14.0), vn(p * 40.0 + 7.7)) - 0.5;
+  w = vec2(w.x + w.y * 0.45, w.y - w.x * 0.6);
+  vec2 pw = p + w * 0.022;
+
+  // key light: the sun (from below at sunset), then the moon
+  vec2 toSun = gSun - p;
+  float dSun = length(toSun);
+  vec2 LdS = normalize(toSun / max(dSun, 1e-3) + vec2(0.0, gLightUp));
+  vec2 toMoon = gMoon - p;
+  float dMoon = length(toMoon);
+  vec2 LdM = normalize(toMoon / max(dMoon, 1e-3) + vec2(0.0, -0.5));
+  vec2 Ld = mix(LdS, LdM, gLightMix);
+  Ld = Ld / max(length(Ld), 0.2);
+  const float E1 = 0.008;
+  const float E2 = 0.024;
+  vec3 Z = vec3(-0.05);
+  float cov = -1.0;
+  vec3 info = vec3(p, -1e3);
+  // local linear model of the mass field (3 evaluations instead of one per billow)
+  vec2 m0 = cloudMass(pw);
+  float mx = cloudMass(pw + vec2(0.02, 0.0)).x;
+  float my = cloudMass(pw + vec2(0.0, 0.02)).x;
+  vec3 M = vec3(m0.x, (mx - m0.x) / 0.02, (my - m0.x) / 0.02);
+  float base = m0.y;
+  billows(pw, Ld * E1, Ld * E2, 0.075, 0.0, 0.0, M, base, true, Z, cov, info);
+  billows(pw, Ld * E1, Ld * E2, 0.036, 13.0, 0.10, M, base, false, Z, cov, info);
+  if (cov < -0.015) return vec4(0.0);
+
+  // lighting from the height field: facing the light, and shadowed by higher billows
+  float g1 = (Z.x - Z.y) / E1;
+  float g2 = (Z.z - Z.x) / E2;
+  float lit = 0.66 + 0.38 * g1 / (1.0 + abs(g1));
+  float far = smoothstep(gHor - 0.17, gHor - 0.05, p.y);
+  lit -= 0.45 * smoothstep(0.05, 0.9, g2) * (1.0 - 0.5 * far);
+  float baseShade = smoothstep(base - 0.09, base + 0.01, p.y);
+  lit -= 0.3 * baseShade * (1.0 - gW.y);
+  lit = clamp(0.5 + (lit - 0.5) * gCloudK, 0.0, 1.0);
+
+  // painted tonal steps
+  float st = brush(p + info.xy * 3.0, vec2(0.6, 0.8), 0.03, 0.009);
+  float st2 = brush(p, vec2(0.8, -0.6), 0.04, 0.012);
+  float sb = mix(lit, bands(lit, mix(st, st2, 0.4), 4.0, 0.22), 0.6);
+  float flatShade = 0.35 + 0.6 * smoothstep(-0.01, 0.035, cov) * smoothstep(base + 0.01, base - 0.05, p.y);
+  sb = mix(sb, bands(flatShade, st2, 3.0, 0.25), far * 0.6);
+
+  float sunNear = exp(-dSun * 3.0) * gNearWarm;
+  float moonNear = exp(-dMoon * 3.5) * gMoonVis;
+  vec3 shadow = mix(gCSh, gCSh * vec3(1.12, 1.0, 0.95), baseShade * 0.5);
+  shadow = mix(shadow, shadow * vec3(0.93, 1.0, 1.04), smoothstep(0.25, 0.02, p.y) * 0.5);
+  vec3 mid = mix(gCMid, gCMid * vec3(1.06, 1.0, 0.9), sunNear);
+  vec3 litc = mix(gCLit, gCLit * vec3(1.0, 0.92, 0.72), sunNear * 0.8);
+  vec3 col = sb < 0.45 ? mix(shadow, mid, smoothstep(0.0, 0.45, sb))
+                       : mix(mid, litc, smoothstep(0.45, 0.85, sb));
+
+  // rim light where billows face the light
+  float rim = smoothstep(0.4, 2.5, g1) * (1.0 - smoothstep(0.0, gRimW, cov));
+  col = mix(col, gRim, rim * gRimAmt * (0.45 + 0.55 * max(sunNear, moonNear * 1.2)));
+  col *= 1.0 + (st2 - 0.5) * 0.035;
+  col += (h12(floor(info.xy * 300.0)) - 0.5) * vec3(0.02, 0.005, -0.02);
+  col = mix(col, mix(gMidSky, gHorSky, 0.45), smoothstep(gHor - 0.18, gHor, info.y) * 0.5);
+
+  // lost edges on the lit side, found edges on the shadow side
+  float soft = mix(0.004, 0.016, smoothstep(0.3, 1.0, sb));
+  float a = smoothstep(-soft, soft, cov + (st2 - 0.5) * 0.012);
+  a *= 1.0 - 0.3 * exp(-dSun * 3.0) * gSunVis * (1.0 - smoothstep(0.0, 0.025, cov));
+  return vec4(col, clamp(a, 0.0, 1.0));
+}
+
+// ---------------------------------------------------------------------- sky --
+vec3 sky(vec2 p) {
+  // broad gouache strokes (constant directions: a position-dependent rotation would swirl)
+  float n1 = brush(p, vec2(0.995, 0.0998), 0.11, 0.024);
+  float n2 = brush(p + vec2(0.0, 0.37), vec2(0.990, -0.141), 0.05, 0.011);
+  float t = clamp(p.y / gHor, 0.0, 1.0);
+  float tb = mix(t, bands(t, n1, 8.0, 0.25), 0.55);
+  vec3 c = mix(gZen, gMidSky, smoothstep(0.0, 0.72, tb));
+  c = mix(c, gHorSky, smoothstep(0.6, 1.05, tb) * 0.6);
+
+  // twilight band hugging the horizon around the setting point
+  float tw = exp(-max(gHor - p.y, 0.0) * 7.0) * exp(-abs(p.x - gSun.x) * 1.3);
+  c = mix(c, gTwiC, clamp(tw * gTwiAmt, 0.0, 1.0));
+
+  // the sun glow, painted as soft concentric tonal steps; it flattens as it sets
+  vec2 d = p - gSun;
+  float r = length(d * vec2(0.8 - 0.35 * gSet, 1.1 + 0.4 * gSet));
+  float g = exp(-r * 2.6);
+  float gb = mix(g, bands(g, n2, 7.0, 0.25), 0.55);
+  c = mix(c, gGlowC, gb * gGlowAmt);
+  float core = gSunVis;
+  if (core > 0.0) {
+    c = mix(c, mix(gCoreC, vec3(1.0, 0.93, 0.76), gW.x), smoothstep(0.3, 1.0, exp(-r * 4.5)) * 0.9 * core);
+    c = mix(c, gCoreC, smoothstep(0.45, 1.0, exp(-r * 7.0)) * core);
+    c = mix(c, mix(gCoreC, vec3(1.0), 0.6), smoothstep(0.045, 0.02, r) * core);
+    // soft rays
+    vec2 rd = d / max(length(d), 1e-4);
+    float rays = smoothstep(0.45, 0.8, vn(rd * 3.6 + 5.0)) * exp(-r * 1.8) * smoothstep(0.03, 0.14, r);
+    c = mix(c, mix(gCoreC, vec3(1.0, 0.96, 0.86), 0.5), rays * 0.30 * core * (1.0 - gSet * 0.5));
+  }
+
+  if (gNight > 0.0) {
+    // painterly stars: soft dabs, denser toward the top
+    float dens = mix(0.42, 0.04, smoothstep(0.0, gHor, p.y));
+    for (int l = 0; l < 2; l++) {
+      float cs = l == 0 ? 0.036 : 0.018;
+      vec2 id = floor(p / cs);
+      vec3 h = h32(id + 31.0 + float(l) * 17.0);
+      if (h.z < dens * (l == 0 ? 0.8 : 0.45)) {
+        vec2 ctr = (id + 0.3 + 0.4 * h.xy) * cs;
+        vec2 dd = (p - ctr) * vec2(1.0, 0.75 + 0.5 * h.y);
+        float sz = (l == 0 ? 0.0019 + 0.0034 * h.x * h.x * h.x : 0.0015);
+        float dl = length(dd);
+        float b = (0.35 + 0.65 * fract(h.x * 13.7 + h.y * 7.1)) * gNight * (l == 0 ? 1.0 : 0.6);
+        float s = smoothstep(sz, sz * 0.2, dl + (vn(dd * 900.0) - 0.5) * sz * 0.5)
+                + 0.3 * exp(-dl * dl / (sz * sz * 4.0));
+        vec3 sc = fract(h.y * 9.3) < 0.3 ? vec3(1.0, 0.92, 0.78) : vec3(0.88, 0.92, 1.0);
+        c = mix(c, sc, clamp(s * b, 0.0, 1.0));
+      }
+    }
+  }
+  if (gMoonVis > 0.0) {
+    // a soft painted moon with a halo
+    vec2 dm = p - gMoon;
+    float rm = length(dm);
+    c = mix(c, vec3(0.55, 0.60, 0.80), exp(-rm * 4.0) * 0.30 * gMoonVis);
+    c = mix(c, vec3(0.78, 0.82, 0.95), exp(-rm * 16.0) * 0.45 * gMoonVis);
+    const float MR = 0.03;
+    float edge = smoothstep(MR, MR - 0.004, rm + (vn(dm * 220.0) - 0.5) * 0.003);
+    float maria = bands(vn(dm * 55.0 + 3.0), vn(dm * 140.0), 3.0, 0.2);
+    vec3 mc = mix(vec3(0.99, 0.97, 0.89), vec3(0.84, 0.86, 0.86), maria * 0.6);
+    mc *= 1.0 - 0.12 * smoothstep(0.0, MR, length(dm + vec2(-0.01, -0.008)));
+    c = mix(c, mc, edge * gMoonVis);
+  }
+  c *= 1.0 + (n2 - 0.5) * 0.035;
+  c += (n1 - 0.5) * vec3(0.016, 0.004, -0.014);
+  return c;
+}
+
+// --------------------------------------------------------------------- land --
+// back-to-front "over" compositing with premultiplied alpha; w carries depth
+void over(inout vec4 acc, inout float accD, vec3 c, float m, float d) {
+  acc = vec4(c, 1.0) * m + acc * (1.0 - m);
+  accD = d * m + accD * (1.0 - m);
+}
+
+float rise(float x) { return smoothstep(0.08, gHalfW + 0.1, abs(x)); }
+
+// ridge line (y, measured downward) of a hill layer
+// prm: (offset below horizon, amplitude, frequency, phase); ra: rise toward the edges
+float ridge(float x, vec4 prm, float ra) {
+  return gHor + prm.x - prm.y * fbm1(x * prm.z + prm.w) - ra * rise(x);
+}
+
+// painted tree clumps sitting on a ridge line. returns (colour, coverage)
+vec4 clumps(vec2 p, float cs, float base, float sink, float dens, float haze, float seed) {
+  base += sink;
+  if (p.y > base + 0.008 || p.y < base - 2.0 * cs) return vec4(0.0);
+  float tid = floor(p.x / cs);
+  float leafy = vn(p * (9.0 / cs)) - 0.5;
+  float best = 0.0, bdl = 2.0, bcx = 0.0, bid = 0.0;
+  vec2 bdv = vec2(0.0);
+  for (int k = -1; k <= 1; k++) {
+    float cid = tid + float(k);
+    float hh = h11(cid * 1.37 + seed);
+    float cxx = (cid + 0.5 + (hh - 0.5) * 0.6) * cs;
+    float pres = smoothstep(0.55, 0.85, vn1(cid * 0.21 + seed) + dens + 0.45 * rise(cxx));
+    if (pres <= 0.0) continue;
+    float r = cs * (0.65 + 0.55 * h11(cid * 2.13 + seed)) * (0.55 + 0.45 * pres);
+    vec2 dv = (p - vec2(cxx, base - r * 0.55)) / r;
+    dv.y *= 1.12;
+    float dl = length(dv) + leafy * 0.28;
+    float inside = smoothstep(1.03, 0.95, dl);
+    if (inside > best) { best = inside; bdl = dl; bdv = dv; bcx = cxx; bid = cid; }
+  }
+  if (best <= 0.0) return vec4(0.0);
+  best *= smoothstep(base + 0.006, base - 0.002, p.y);
+  float sx = clamp((gSun.x - bcx) * 3.0, -0.8, 0.8);
+  vec3 L = normalize(vec3(sx, -0.75, 0.45));
+  float lit = clamp(dot(normalize(vec3(bdv, 0.55)), L) * 0.8 + 0.3, 0.0, 1.0);
+  float leaf = vn(p * (16.0 / cs) + bid);
+  float lb = mix(lit, bands(lit, leaf, 3.0, 0.14), 0.85);
+  vec3 c = mix(vec3(0.29, 0.34, 0.25), vec3(0.50, 0.55, 0.34), smoothstep(0.1, 0.55, lb));
+  c = mix(c, vec3(0.74, 0.72, 0.46), smoothstep(0.6, 0.95, lb));
+  // warm rim on the sun side
+  c = mix(c, vec3(0.86, 0.80, 0.55), smoothstep(0.82, 0.98, bdl) * step(0.0, sx * bdv.x - bdv.y * 0.3) * 0.6);
+  c = mix(c, mix(C_FAR, C_CREAM, 0.35), haze);
+  return vec4(c, best);
+}
+
+// returns colour (already re-lit for the time of day) and coverage
+vec4 land(vec2 p) {
+  float x = p.x;
+  const vec4 PA = vec4(-0.006, 0.016, 6.0, 20.0);
+  const vec4 PB = vec4(0.016, 0.024, 4.2, 11.0);
+  const vec4 PM = vec4(0.056, 0.030, 2.8, 2.0);
+  const vec4 PG = vec4(0.112, 0.018, 1.6, 4.0);
+  float raM = x < 0.0 ? 0.090 : 0.075;
+  float yA = ridge(x, PA, 0.022);
+  if (p.y < yA - 0.07) return vec4(0.0);
+  float yB = ridge(x, PB, 0.040);
+  float yM = ridge(x, PM, raM);
+  float yG = ridge(x, PG, 0.070);
+
+  float sunPull = exp(-abs(x - gSunDay.x) * 2.5);
+  vec3 haze = mix(C_CREAM, vec3(0.98, 0.90, 0.74), sunPull);
+  float sb = brush(p, vec2(0.981, 0.196), 0.05, 0.007);
+  float sb2 = brush(p, vec2(0.970, -0.243), 0.03, 0.005);
+  float lsx = sign(gSun.x - x + 1e-4);
+
+  vec4 acc = vec4(0.0);
+  float accD = 0.0;
+  if (p.y < yG + 0.004) {
+  if (p.y < yM + 0.004) {
+  // far range A: barely there
+  over(acc, accD, mix(mix(C_FAR, haze, 0.55), vec3(0.74, 0.77, 0.76), 0.25),
+       smoothstep(-0.0015, 0.0015, p.y - yA + (sb - 0.5) * 0.003), 0.0);
+
+  // far range B: hazy sage, lit tops, fading into valley haze
+  {
+    float m = smoothstep(-0.0015, 0.0015, p.y - yB + (sb2 - 0.5) * 0.003);
+    float lit = clamp(0.5 + (fbm1(x * 9.0 + 3.0) - 0.5) * 1.6, 0.0, 1.0);
+    vec3 c = mix(C_FAR * 0.95, mix(C_FAR, C_CREAM, 0.45), bands(lit, sb, 3.0, 0.2));
+    c = mix(c, haze, 0.25 + 0.3 * smoothstep(0.0, 0.03, p.y - yB));
+    over(acc, accD, c, m, 0.22);
+  }
+  // small far trees on ridge B
+  {
+    vec4 t = clumps(p, 0.011, yB, 0.004, -0.05, 0.55, 7.0);
+    over(acc, accD, t.rgb, t.a, 0.28);
+  }
+  }
+  // mid hills: olive-sage with sunlit slopes and strokes along the slope
+  if (p.y > yM - 0.003) {
+    float m = smoothstep(-0.0015, 0.0015, p.y - yM + (sb - 0.5) * 0.003);
+    float sl = (ridge(x + 0.010, PM, raM) - yM) / 0.010;
+    float st = vn(vec2(x / 0.035, (p.y - yM) / 0.006));     // strokes parallel to the ridge
+    float roll = vn(vec2(x * 7.0, (p.y - yM) * 14.0) + 3.0);
+    float lit = clamp(0.45 + sl * lsx * 1.2 + (roll - 0.5) * 0.5, 0.0, 1.0);
+    float lb = mix(lit, bands(lit, st, 3.0, 0.25), 0.6);
+    vec3 c = mix(vec3(0.50, 0.56, 0.44), C_MID, smoothstep(0.0, 0.5, lb));
+    c = mix(c, vec3(0.76, 0.75, 0.51), smoothstep(0.5, 1.0, lb));
+    c = mix(c, vec3(0.88, 0.83, 0.62), smoothstep(0.010, 0.0, p.y - yM) * 0.55);   // lit ridge
+    c = mix(c, haze, 0.18 + 0.45 * smoothstep(0.004, 0.06, p.y - yM));        // valley mist
+    c *= 1.0 + (st - 0.5) * 0.06;
+    over(acc, accD, c, m, 0.5);
+  }
+  // tree clumps on the mid hills
+  {
+    vec4 t = clumps(p, 0.017, yM, 0.010, -0.12, 0.30, 3.0);
+    over(acc, accD, t.rgb, t.a, 0.58);
+  }
+  }
+  // near tree clumps behind the meadow edge
+  {
+    vec4 t = clumps(p, 0.030, yG, 0.006, 0.0, 0.0, 1.0);
+    over(acc, accD, t.rgb, t.a, 0.9);
+  }
+
+  // meadow
+  float z = clamp((p.y - yG) / max(gRoll - yG, 0.02), 0.0, 1.0);
+  if (p.y > yG - 0.003) {
+    float gm = smoothstep(-0.0015, 0.0015, p.y - yG + (sb - 0.5) * 0.003);
+    // perspective rows: row height and cell width both grow with distance below y0,
+    // so cells stay roughly square on screen
+    const float A = 0.16;
+    float lv = log(max(p.y - (gHor - 0.02), 0.01)) / A;
+    float lp = vn(vec2(x * 4.0, p.y * 13.0) + 5.0);
+    vec3 gc = mix(vec3(0.88, 0.83, 0.58), C_MEADOW1, smoothstep(0.0, 0.35, z));
+    gc = mix(gc, C_MEADOW2, smoothstep(0.4, 1.0, z) * 0.6);
+    // grass flicks: short near-vertical strokes, one set per perspective row
+    float rv = lv * 2.0;
+    float ir = floor(rv);
+    float fr = rv - ir;
+    float uu = x / (A * exp((ir + 0.5) * 0.5 * A) * 0.5);
+    float g1 = vn(vec2(uu * 4.0 + fr * 1.2 + ir * 7.1, fr * 0.7 + ir * 3.3));
+    float g2 = vn(vec2(uu * 9.0 - fr * 0.8 + ir * 1.9, fr * 1.3 + ir * 5.7));
+    float shade = bands(clamp(lp + (g1 - 0.5) * 0.3, 0.0, 1.0), g2, 3.0, 0.15);
+    gc = mix(gc * vec3(0.84, 0.88, 0.80), gc, smoothstep(0.66, 0.42, shade));     // shadow patches
+    gc = mix(gc, vec3(0.95, 0.86, 0.55), smoothstep(0.40, 0.16, shade) * 0.5);   // sun patches
+    gc = mix(gc, vec3(0.95, 0.89, 0.66), sunPull * (1.0 - z) * 0.35);
+    gc *= 0.90 + 0.16 * mix(g1, g2, 0.45);
+    gc = mix(gc, vec3(0.90, 0.85, 0.62), smoothstep(0.012, 0.0, p.y - yG) * 0.35);
+    float dM = 0.75 + 0.25 * z;
+    over(acc, accD, gc, gm, dM);
+
+    // flowers: dabs in perspective cells, gathered into drifts
+    float drift = vn(vec2(x * 6.0, p.y * 11.0) + 11.0);
+    float prob = smoothstep(0.40, 0.62, drift + z * 0.15) * 0.8 + 0.05;
+    for (int l = 0; l < 2; l++) {
+      float fl = float(l);
+      float sc = 1.0 + fl * 0.8;
+      float vv = lv * sc + fl * 0.61;
+      float iv = floor(vv);
+      float cw = A * exp((iv + 0.5 - fl * 0.61) / sc * A) / sc;  // cell width on screen
+      float fu = x / cw + h11(iv + fl * 17.0) * 9.0;
+      vec2 id = vec2(floor(fu), iv);
+      vec2 f = vec2(fu, vv) - id;
+      vec3 h = h32(id + 41.0 * fl);
+      if (h.z > prob) continue;
+      vec2 ctr = 0.3 + 0.4 * h.xy;
+      float rr = 0.16 + 0.13 * h.y;
+      vec2 dd = (f - ctr) * vec2(1.0, 1.25);
+      float wob = (vn(f * 5.0 + id * 1.7) - 0.5) * 0.55;
+      float fm = smoothstep(1.05, 0.85, length(dd) / rr + wob) * gm * smoothstep(0.0, 0.12, z);
+      float sh = smoothstep(1.1, 0.6, length(dd - vec2(0.03, rr * 0.6)) / rr) * gm * 0.4;
+      acc.rgb *= 1.0 - sh * (1.0 - fm) * vec3(0.30, 0.25, 0.42);
+      float pick = fract(h.x * 7.31 + h.y * 3.17);
+      vec3 fc = pick < 0.5 ? C_YELLOW : (pick < 0.8 ? C_ORANGE : C_WHITE);
+      fc *= 0.85 + 0.2 * smoothstep(0.4, -0.5, dd.y / rr);
+      fc = mix(fc, haze, (1.0 - z) * 0.3);
+      over(acc, accD, fc, fm, dM);
+    }
+  }
+
+  // morning mist lying on the meadow, thickest at the bottom
+  float mb = brush(p, vec2(1.0, 0.0), 0.10, 0.012);
+  float mist = smoothstep(gRoll - 0.065, gRoll - 0.002, p.y) * (0.72 + 0.38 * mb);
+  mist = max(mist, exp(-pow((p.y - yG - 0.012) / 0.014, 2.0)) * 0.30 * smoothstep(-0.002, 0.002, p.y - yG) * (0.6 + 0.6 * mb));
+  mist = clamp(mist, 0.0, 0.92);
+  acc.rgb = mix(acc.rgb, C_MIST * acc.a, mist);
+
+  vec3 col = acc.rgb / max(acc.a, 1e-4);
+  float dep = accD / max(acc.a, 1e-4);
+  col = grade(col, mix(dep, 0.45, mist * 0.6));
+
+  if (gNight > 0.0 && p.y > yG) {
+    // a few warm fireflies drifting over the meadow
+    const float FC = 0.045;
+    vec2 id = floor(p / FC);
+    vec3 h = h32(id + 77.0);
+    if (h.z < 0.13) {
+      vec2 dd = p - (id + 0.3 + 0.4 * h.xy) * FC;
+      float d2 = dot(dd, dd);
+      float glow = exp(-d2 / 0.0000045) + 0.35 * exp(-d2 / 0.00003);
+      col += vec3(1.0, 0.80, 0.40) * glow * gNight * (0.6 + 0.4 * h.x) * (1.0 - mist * 0.7);
+    }
+  }
+  return vec4(col, acc.a);
+}
+
+// --------------------------------------------------------------- composite --
+vec3 paintSample(vec2 px, vec2 res) {
+  vec2 p = vec2((px.x - 0.5 * res.x) / res.y, px.y / res.y);
+  if (p.y > gRoll + 0.004) {
+    // hidden under the typewriter roller: just let the mist continue, cheaply
+    float mb = vn(vec2(p.x * 10.0, p.y * 80.0));
+    return grade(mix(C_MIST, C_MEADOW1, 0.10 + 0.10 * mb), 0.5);
+  }
+  vec3 col = vec3(0.0);
+  if (p.y < gHor + 0.002) {
+    col = sky(p);
+    if (p.y < gHor + 0.02) {
+      vec4 c = clouds(p);
+      col = mix(col, c.rgb, c.a);
+    }
+  }
+  if (p.y > gHor - 0.12) {
+    vec4 l = land(p);
+    col = mix(col, l.rgb, l.a);
+  }
+  // atmospheric bloom: sun (spreading along the horizon as it sets), then the moon
+  vec2 d = p - gSun;
+  float r = length(d * vec2(0.7 - 0.3 * gSet, 1.1 + 0.6 * gSet));
+  col = mix(col, gGlowC, exp(-r * 2.2) * gBloomAmt);
+  col = mix(col, gCoreC, exp(-r * 6.5) * gCoreAmt);
+  if (gMoonVis > 0.0) col = mix(col, vec3(0.70, 0.76, 0.92), exp(-length(p - gMoon) * 9.0) * 0.18 * gMoonVis);
+  return clamp(col, 0.0, 1.0);
+}
+
+// paper / pigment grain, applied once per pixel after supersampling
+vec3 paperGrain(vec3 col, vec2 px, vec2 res) {
+  vec2 p = px / res.y;
+  float gr = vn(p * 620.0) * 0.6 + vn(p * 210.0 + 5.0) * 0.4;
+  return col * (0.976 + 0.04 * gr);
+}
+
+vec3 painting(vec2 px, vec2 res) {
+  setupScene(res);
+#if SSAA
+  // 4x rotated-grid supersampling
+  vec3 c = paintSample(px + vec2( 0.125,  0.375), res);
+#if SSAA_ADAPTIVE
+  // quads whose first sample is already smooth skip the other three
+  // (needs painting() to be called in uniform control flow, as from main())
+  vec3 dc = abs(dFdx(c)) + abs(dFdy(c));
+  if (max(dc.r, max(dc.g, dc.b)) > SSAA_THRESHOLD) {
+#endif
+    c += paintSample(px + vec2(-0.375,  0.125), res);
+    c += paintSample(px + vec2(-0.125, -0.375), res);
+    c += paintSample(px + vec2( 0.375, -0.125), res);
+    c *= 0.25;
+#if SSAA_ADAPTIVE
+  }
+#endif
+#else
+  vec3 c = paintSample(px, res);
+#endif
+  return paperGrain(c, px, res);
+}
+`;
+const FULL_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+// SSAA (a define) picks four rotated-grid samples where the picture has edges, or one sample for the quick pass.
+const PAINT_FS = `
+uniform vec2 uRes;
+varying vec2 vUv;
+${PAINT_GLSL}
+void main() { gl_FragColor = vec4(painting(vec2(vUv.x, 1.0 - vUv.y) * uRes, uRes), 1.0); }`;
+// The view, then the machine's enamel body from the roller down.
+const VIEW_FS = `
+uniform sampler2D uPaint; uniform vec2 uRes; uniform float uBodyY, uNight, uLamp;
+varying vec2 vUv;
+float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+void main() {
+  vec2 px = vec2(vUv.x, 1.0 - vUv.y) * uRes;
+  vec3 col = texture2D(uPaint, vUv).rgb;
+  float below = px.y - uBodyY;
+  if (below > 0.0) {
+    float t = clamp(below / max(uRes.y - uBodyY, 1.0), 0.0, 1.0);
+    vec3 day = mix(vec3(0.62, 0.67, 0.52), vec3(0.47, 0.53, 0.40), t);
+    vec3 night = mix(vec3(0.13, 0.16, 0.19), vec3(0.07, 0.08, 0.11), t);
+    vec3 body = mix(day, night, uNight);
+    body *= 1.0 - 0.35 * exp(-below / (0.035 * uRes.y));                 // shade tucked under the roller
+    body += (h21(floor(px)) - 0.5) * 0.012;                              // a fine enamel grain against banding
+    body = mix(body, body * vec3(1.9, 1.45, 1.0), uLamp * 0.6 * exp(-pow((px.x / uRes.x - 0.5) * 2.2, 2.0)) * exp(-below / (0.25 * uRes.y)));
+    col = body;
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
 async function initGL() {
   try {
     THREE = await import("./vendor/three/three.module.min.js");
@@ -1106,12 +1896,32 @@ async function initGL() {
   stage.appendChild(glCanvas);
   renderer.setClearColor(0x161514, 1);
   const scene = new THREE.Scene();
+  // The view is painted once into a full-resolution target (four samples a pixel) and again only when the light,
+  // the size or the roller changes; while the lamp is fading it repaints a quicker, single-sample pass each frame.
+  const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new THREE.PlaneGeometry(2, 2);
+  const paintUniforms = { uRes: { value: new THREE.Vector2(1, 1) }, uRollerY: { value: 0 }, uNight: { value: 0 } };
+  const paintMats = [0, 1].map(ssaa => new THREE.ShaderMaterial({ vertexShader: FULL_VS, fragmentShader: PAINT_FS, depthTest: false, depthWrite: false,
+    uniforms: paintUniforms, defines: { SSAA: ssaa }, extensions: { derivatives: true } }));
+  const paintMesh = new THREE.Mesh(quad, paintMats[1]), paintScene = new THREE.Scene(); paintScene.add(paintMesh);
+  const viewMat = new THREE.ShaderMaterial({ vertexShader: FULL_VS, fragmentShader: VIEW_FS, depthTest: false, depthWrite: false,
+    uniforms: { uPaint: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uBodyY: { value: 0 }, uNight: { value: 0 }, uLamp: { value: 0 } } });
+  const viewScene = new THREE.Scene(); viewScene.add(new THREE.Mesh(quad, viewMat));
+  const rtOpts = { depthBuffer: false, stencilBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+  const paintHi = new THREE.WebGLRenderTarget(1, 1, rtOpts), paintLo = new THREE.WebGLRenderTarget(1, 1, rtOpts);
+  let painted = "";                                                    // what paintHi currently holds
+  function paintView(rt, w, h, rollerY, night, ssaa) {
+    rt.setSize(w, h);
+    paintUniforms.uRes.value.set(w, h); paintUniforms.uRollerY.value = rollerY * h / H;
+    paintUniforms.uNight.value = night; paintMesh.material = paintMats[ssaa];
+    renderer.setRenderTarget(rt); renderer.render(paintScene, ortho); renderer.setRenderTarget(null);
+    viewMat.uniforms.uPaint.value = rt.texture;
+  }
   const camera = new THREE.PerspectiveCamera(30, 1, 1, 10000);
 
   // A soft studio for the metal to reflect: light above, dark below.
   const envCanvas = document.createElement("canvas"); envCanvas.width = 256; envCanvas.height = 128;
   const eg = envCanvas.getContext("2d"), envGrad = eg.createLinearGradient(0, 0, 0, 128);
-  envGrad.addColorStop(0, "#f4f1ea"); envGrad.addColorStop(0.42, "#b9b6b0"); envGrad.addColorStop(0.5, "#ffffff"); envGrad.addColorStop(0.58, "#6d6a66"); envGrad.addColorStop(1, "#141312");
+  envGrad.addColorStop(0, "#DCE4E4"); envGrad.addColorStop(0.42, "#F3E2C0"); envGrad.addColorStop(0.5, "#FFF6E2"); envGrad.addColorStop(0.58, "#9AA77F"); envGrad.addColorStop(1, "#3E4630");
   eg.fillStyle = envGrad; eg.fillRect(0, 0, 256, 128);
   const envTex = new THREE.CanvasTexture(envCanvas); envTex.mapping = THREE.EquirectangularReflectionMapping; envTex.colorSpace = THREE.SRGBColorSpace;
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -1130,6 +1940,7 @@ async function initGL() {
     uPxPerPt: { value: 1 }, uView: { value: new THREE.Vector2(1, 1) },
     uRodY: { value: ROD_Y }, uRodR: { value: ROD_R }, uCaretX: { value: 0 },
     uBendY: { value: BEND_Y }, uBendR: { value: PLATEN_R },
+    uGrid: { value: new THREE.Vector4() }, uSel: { value: new THREE.Vector4(-1, 0, 0, 0) }, uSelShift: { value: new THREE.Vector2() },
   };
   const paperMat = new THREE.ShaderMaterial({ uniforms, vertexShader: PAPER_VS, fragmentShader: PAPER_FS, extensions: { derivatives: true },
     transparent: true, premultipliedAlpha: true, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor });
@@ -1137,15 +1948,15 @@ async function initGL() {
   paper.frustumCulled = false; scene.add(paper);
 
   // The rod, its end caps, the type guide with its three lamps, and the pointer.
-  const steel = new THREE.MeshStandardMaterial({ color: 0x5d6168, metalness: 0.92, roughness: 0.3 });
-  const black = new THREE.MeshStandardMaterial({ color: 0x141414, metalness: 0.4, roughness: 0.5 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0xC9A464, metalness: 0.95, roughness: 0.26 });     // brass, warm like the sunrise
+  const black = new THREE.MeshStandardMaterial({ color: 0x7F8B60, metalness: 0.1, roughness: 0.42 });      // sage enamel, like the hills
   const rod = new THREE.Mesh(new THREE.CylinderGeometry(ROD_R, ROD_R, 1, 40, 1, true), steel);
   rod.rotation.z = Math.PI / 2; scene.add(rod);
   const capGeo = new THREE.CylinderGeometry(ROD_R + 2.2, ROD_R + 2.2, 15, 40);
   const capL = new THREE.Mesh(capGeo, black), capR = new THREE.Mesh(capGeo, black);
   capL.rotation.z = capR.rotation.z = Math.PI / 2; scene.add(capL, capR);
   // The platen: the rubber roller the sheet wraps round, just behind the rod.
-  const rubber = new THREE.MeshStandardMaterial({ color: 0x121110, roughness: 0.74, metalness: 0 });
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x4A5236, roughness: 0.78, metalness: 0 });
   const platen = new THREE.Mesh(new THREE.CylinderGeometry(PLATEN_R - 0.6, PLATEN_R - 0.6, 1, 72, 1, true), rubber);
   platen.rotation.z = Math.PI / 2; scene.add(platen);
 
@@ -1297,6 +2108,9 @@ async function initGL() {
     uniforms.uWinTop.value = viewTop - 90; uniforms.uWinH.value = (viewBottom - viewTop) + 180;
     if (INK.dirty || INK.sig !== inkSig() || viewTop - 30 < INK.top || viewBottom + 30 > INK.top + INK.h) redrawInk((viewTop + viewBottom) / 2);
     uniforms.uPxPerPt.value = zoom * DPR; uniforms.uView.value.set(W * DPR, H * DPR);
+    uniforms.uGrid.value.set(topMargin(sheet), LH, SIDE, ADV);
+    const box = selBox();
+    if (box) { uniforms.uSel.value.set(...box.slice(0, 4)); uniforms.uSelShift.value.set(box[4], box[5]); } else uniforms.uSel.value.x = -1;
     const cx = spring.x.v - PAPER_W / 2, camY = camera.position.y;
     uniforms.uCaretX.value = cx;
     // Rod across the whole window, capped at both ends; parts in front are placed so they line up with the type.
@@ -1321,8 +2135,18 @@ async function initGL() {
     lampLight.position.set(cx * kGuide, camY + (-6 - camY) * kGuide, 40); lampLight.intensity = 2.6 * lamp;
     steel.envMapIntensity = 1 - lamp * 0.75; black.envMapIntensity = 1 - lamp * 0.75; pillMat.envMapIntensity = 0.6 * (1 - lamp * 0.7);
     rubber.envMapIntensity = 0.22 * (1 - lamp * 0.8);    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
-    renderer.setClearColor(0x161514, 1);
-    renderer.render(scene, camera);
+    // The view: painted for where the roller will settle, and as far into the night as the lamp has gone.
+    const kPl = dist / (dist + PLATEN_R + BOW + 0.6), camTo = (spring.sy.to - H / 2) / zoom;
+    const rollerTop = H / 2 - (BEND_Y + PLATEN_R - camTo) * zoom * kPl, bodyY = H / 2 - (BEND_Y - camY) * zoom * kPl;
+    const fading = Math.abs(lamp - spring.lamp.to) > 0.002 || Math.abs(spring.lamp.vel) > 0.002;
+    const want = `${W}x${H}@${DPR}:${Math.round(rollerTop)}:${lamp.toFixed(3)}`;
+    if (fading) { paintView(paintLo, W, H, rollerTop, lamp, 0); painted = ""; }
+    else if (painted !== want) { paintView(paintHi, Math.round(W * DPR), Math.round(H * DPR), rollerTop, lamp, 1); painted = want; }
+    viewMat.uniforms.uRes.value.set(W * DPR, H * DPR); viewMat.uniforms.uBodyY.value = bodyY * DPR;
+    viewMat.uniforms.uNight.value = lamp; viewMat.uniforms.uLamp.value = lamp;
+    renderer.autoClear = false; renderer.clear();
+    renderer.render(viewScene, ortho); renderer.clearDepth();
+    renderer.render(scene, camera); renderer.autoClear = true;
   }
   // Downloads go through the same shader, flat and evenly lit, a band at a time.
   function exportGL(L, paperH, scale) {
@@ -1377,17 +2201,30 @@ function resize2D() {
 }
 function draw2D() {
   const g = ctx2d, sy = spring.sy.v;
-  g.setTransform(DPR, 0, 0, DPR, 0, 0); g.fillStyle = "#161514"; g.fillRect(0, 0, W, H);
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const n = spring.lamp.v, rodLine = sy - ROD_Y * zoom, skyG = g.createLinearGradient(0, 0, 0, rodLine);
+  skyG.addColorStop(0, n > 0.5 ? "#1E2246" : "#BFCBCB"); skyG.addColorStop(0.7, n > 0.5 ? "#3A3566" : "#F2E4C6"); skyG.addColorStop(1, n > 0.5 ? "#1D2A2A" : "#A9B07A");
+  g.fillStyle = skyG; g.fillRect(0, 0, W, rodLine); g.fillStyle = n > 0.5 ? "#151A1E" : "#8F9A72"; g.fillRect(0, rodLine, W, H - rodLine);
   g.save(); g.translate(W / 2, sy); g.scale(zoom, zoom);
   const ox = -PAPER_W / 2, oy = -topMargin(sheet) - spring.y.v, viewTop = -sy / zoom;
   g.translate(0, viewTop);
   drawSheet(g, sheet, typist.layout, ox, oy - viewTop, null, W / zoom, H / zoom, true);
+  const box = selBox();
+  if (box) {
+    const y0 = oy - viewTop + topMargin(sheet);
+    g.save(); g.globalCompositeOperation = "multiply"; g.fillStyle = "#B3D1FF";
+    for (let li = box[0]; li <= box[2]; li++) {
+      const c0 = li === box[0] ? box[1] + box[4] : 0, c1 = li === box[2] ? box[3] + box[5] : COLS;
+      g.fillRect(ox + SIDE + c0 * ADV, y0 + (li - 0.74) * LH, (c1 - c0) * ADV, LH);
+    }
+    g.restore();
+  }
   g.restore();
   const z = zoom, ry = sy - ROD_Y * z, cx = W / 2 + (spring.x.v - PAPER_W / 2) * z;
   g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(0, ry + ROD_R * z, W, 4 * z);
-  g.fillStyle = "#5d6168"; g.fillRect(0, ry - ROD_R * z, W, ROD_R * 2 * z);
-  g.fillStyle = "#9a9da3"; g.fillRect(0, ry - ROD_R * z, W, 2 * z);
-  g.fillStyle = "#141414"; g.fillRect(0, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z); g.fillRect(W - 14 * z, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z);
+  g.fillStyle = "#C9A464"; g.fillRect(0, ry - ROD_R * z, W, ROD_R * 2 * z);
+  g.fillStyle = "#EBD49A"; g.fillRect(0, ry - ROD_R * z, W, 2 * z);
+  g.fillStyle = "#7F8B60"; g.fillRect(0, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z); g.fillRect(W - 14 * z, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z);
   g.fillStyle = "#F1EDE4"; g.beginPath(); g.roundRect(cx - PILL_LEN / 2 * z, ry - PILL_R * z, PILL_LEN * z, PILL_R * 2 * z, PILL_R * z); g.fill();
   ["#3dff7a", "#ffc23d", "#ff4438"].forEach((c, i) => {
     const x = cx + (i - 1) * 10.5 * z, glow = lampGlow[i];
@@ -1397,14 +2234,115 @@ function draw2D() {
   g.fillStyle = "#3b3936"; g.fillRect(cx - 4.25 * z, sy + 6 * z, 8.5 * z, 1.7 * z); g.fillRect(cx - 0.85 * z, sy + 7 * z, 1.7 * z, 15 * z);
 }
 
+// ---------- Selecting: drag across letters, then copy, cut, delete or type over them ----------
+let sel = null;                                  // character boundaries: a where the selection began, b where it ends
+const undoStack = [];
+function selRange() {
+  if (!sel) return null;
+  const a = Math.min(sel.a, sel.b), b = Math.max(sel.a, sel.b);
+  return a < b ? [a, b] : null;
+}
+function selText() { const r = selRange(); return r ? typist.chars.slice(r[0], r[1]).join("") : ""; }
+// Line and column of character i. A line break sits just past its line's last letter.
+function charPos(i) {
+  const lines = typist.layout.lines;
+  for (let li = 0; li < lines.length; li++) {
+    const g = lines[li].glyphs;
+    if (g.length && i >= g[0].index && i <= g[g.length - 1].index) return [li, g[i - g[0].index].col];
+    if (lines[li].end === i) return [li, g.length];
+  }
+  const li = lines.length - 1; return [li, lines[li].glyphs.length];
+}
+// The selection as the shader draws it: first line, first column, last line, end column, and both lines' alignment shifts.
+function selBox() {
+  const r = selRange(); if (!r) return null;
+  const A = charPos(r[0]), B = charPos(r[1] - 1), lines = typist.layout.lines;
+  return [A[0], A[1], B[0], B[1] + 1, lineShift(sheet, lines[A[0]]), lineShift(sheet, lines[B[0]])];
+}
+const editBar = $("#editBar");
+function setSel(a, b) {
+  sel = { a, b }; document.body.classList.add("selecting");
+  const some = !!selRange();
+  for (const btn of editBar.querySelectorAll("[data-needs-sel]")) btn.disabled = !some;
+  kick();
+}
+function clearSel() { if (!sel) return; sel = null; document.body.classList.remove("selecting"); kick(); }
+// Which gap between letters sits under a point on screen (the inverse of toScreen, bow included).
+function boundaryAt(px, py) {
+  const d = camDist(), camY = (spring.sy.v - H / 2) / zoom;
+  let x = (px - W / 2) / zoom, k = 1;
+  if (GL) { for (let i = 0; i < 2; i++) { k = d / (d - paperDepth(x)); x = (px - W / 2) / zoom / k; } }
+  const y = camY - (py - H / 2) / (zoom * k), tm = topMargin(sheet);
+  const sheetX = x + PAPER_W / 2, sheetY = tm + spring.y.v - y;
+  const lines = typist.layout.lines, li = clamp(Math.floor((sheetY - tm) / LH + 0.74), 0, lines.length - 1);
+  const line = lines[li], c = (sheetX - SIDE) / ADV - lineShift(sheet, line);
+  for (const g of line.glyphs) if (c < g.col + 0.5) return g.index;
+  if (line.end != null) return line.end;
+  return line.glyphs.length ? line.glyphs[line.glyphs.length - 1].index + 1 : typist.chars.length;
+}
+function wordAround(i) {
+  const c = typist.chars, inWord = k => k >= 0 && k < c.length && !/\s/.test(c[k]);
+  let a = inWord(i) ? i : inWord(i - 1) ? i - 1 : -1;
+  if (a < 0) return [i, i];
+  while (inWord(a - 1)) a--;
+  let b = a; while (inWord(b)) b++;
+  return [a, b];
+}
+function selectAll() { if (typist.chars.length) setSel(0, typist.chars.length); }
+// The new text replaces the whole sheet, so every edit is one step back with Undo.
+function setText(text) {
+  typist = new Typist(text); sheet.text = typist.text; sheet.updated = Date.now(); persist();
+  review = clamp(review, 0, reviewLimit()); coast = null;
+  if (GL) GL.redrawAll();
+  retarget(); kick(); updateMeta();
+}
+function removeSel(quiet) {
+  const r = selRange(); if (!r) return 0;
+  undoStack.push(sheet.text); if (undoStack.length > 50) undoStack.shift();
+  const c = typist.chars; clearSel();
+  setText(c.slice(0, r[0]).join("") + c.slice(r[1]).join(""));
+  if (!quiet) feedback(["backspace"]);
+  return r[1] - r[0];
+}
+function deleteSel() {
+  const n = removeSel();
+  if (n) toast(n === 1 ? "Took back 1 letter." : `Took back ${thousands(n)} letters.`, { label: "Undo", run: undoEdit });
+}
+function undoEdit() {
+  if (!undoStack.length) return;
+  clearSel(); setText(undoStack.pop()); unlockAudio(); play("feed", 0.6);
+}
+// Copies through a throwaway text field, which works in every browser and inside the artifact frame.
+let keepTyping = false;
+function copyText(text) {
+  const t = document.createElement("textarea"), back = document.activeElement;
+  t.value = text; t.setAttribute("readonly", ""); t.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0";
+  keepTyping = true; document.body.appendChild(t); t.select(); t.setSelectionRange(0, text.length);
+  let ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+  t.remove(); if (back && back !== document.body) back.focus({ preventScroll: true }); keepTyping = false;
+  if (!ok) {
+    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => toast("This browser won't let the page copy. Try ⌘C or Ctrl+C."));
+    else toast("This browser won't let the page copy.");
+  }
+}
+function copySel() { const t = selText(); if (!t) return false; copyText(t); toast("Copied."); return true; }
+function cutSel() { const t = selText(); if (!t) return; copyText(t); removeSel(); toast("Cut.", { label: "Undo", run: undoEdit }); }
+async function pasteClipboard() {
+  let text = "";
+  try { text = navigator.clipboard ? await navigator.clipboard.readText() : ""; } catch (e) {}
+  if (text) { setTyping(true); strike(text); }
+  else toast(finePointer() ? "The browser keeps the clipboard private here. Press ⌘V or Ctrl+V." : "The browser keeps the clipboard private here. Tap the page, then paste from your keyboard.");
+}
+
 // ---------- Typing ----------
 function strike(input) {
   if (!input) return;
+  if (sel) { const r = selRange(); if (r && r[1] === typist.chars.length) removeSel(true); else clearSel(); }   // type over a selection that runs to the carriage
   unlockAudio();
   const before = typist.layout.line;
   after(typist.type(input), before);
 }
-function takeBack() { unlockAudio(); const before = typist.layout.line; after(typist.backspace(), before); }
+function takeBack() { if (selRange()) { deleteSel(); return; } clearSel(); unlockAudio(); const before = typist.layout.line; after(typist.backspace(), before); }
 function after(events, beforeLine) {
   feedback(events);
   if (!events.length || (events.length === 1 && events[0] === "jammed")) return;
@@ -1448,7 +2386,7 @@ keys.addEventListener("keydown", e => {
   else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); setTyping(false); openPanel("savePanel", $("#saveKey")); }
   else if (e.altKey && e.code === "KeyN") { e.preventDefault(); feedNew(); }
 });
-keys.addEventListener("blur", () => { if (typing && !panelOpen()) setTyping(false); });
+keys.addEventListener("blur", () => { if (typing && !panelOpen() && !keepTyping) setTyping(false); });
 
 function setTyping(on) {
   if (on === typing && (!on || document.activeElement === keys)) return;
@@ -1486,13 +2424,31 @@ stage.addEventListener("pointerdown", e => {
   coast = null;
   const start = typist.layout.line * LH - spring.y.v;      // catch the page where it is right now
   if (moving) { review = start; spring.y.to = spring.y.v; spring.y.vel = 0; }
-  drag = { id: e.pointerId, y: e.clientY, start, moved: false, caught: moving || swallowed, wasTyping: typing, samples: [{ t: e.timeStamp, y: e.clientY }] };
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, start, moved: false, caught: moving || swallowed, wasTyping: typing, samples: [{ t: e.timeStamp, y: e.clientY }] };
   stage.setPointerCapture(e.pointerId);
+  // A mouse selects by dragging (Shift extends); a finger scrolls, and selects a word after a long press.
+  const at = boundaryAt(e.clientX, e.clientY);
+  if (e.pointerType === "mouse") {
+    drag.pick = e.shiftKey && sel ? sel.a : at;
+    if (e.shiftKey && sel) { drag.selecting = drag.moved = true; setSel(sel.a, at); }
+  } else {
+    drag.hold = setTimeout(() => {
+      if (!drag || drag.moved) return;
+      const w = wordAround(at); drag.pick = w[0]; drag.selecting = drag.moved = true;
+      setSel(w[0], w[1]); buzz(10);
+    }, 450);
+  }
 });
 stage.addEventListener("pointermove", e => {
   if (!drag || e.pointerId !== drag.id) return;
+  if (drag.pick != null) {
+    if (!drag.selecting && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) return;
+    drag.selecting = drag.moved = true;
+    setSel(drag.pick, boundaryAt(e.clientX, e.clientY));
+    return;
+  }
   const dy = e.clientY - drag.y;
-  if (!drag.moved && Math.abs(dy) > 6) drag.moved = true;
+  if (!drag.moved && Math.abs(dy) > 6) { drag.moved = true; clearTimeout(drag.hold); }
   pushSample(drag.samples, e);
   if (!drag.moved) return;
   const raw = drag.start + dy / zoom, lim = reviewLimit(), dim = H / zoom;
@@ -1502,7 +2458,9 @@ stage.addEventListener("pointermove", e => {
 });
 function endDrag(e) {
   if (!drag || e.pointerId !== drag.id) return;
-  const d = drag; drag = null;
+  const d = drag; drag = null; clearTimeout(d.hold);
+  if (d.selecting) { if (!selRange() && e.pointerType === "mouse") clearSel(); return; }
+  if (!d.moved && sel) { clearSel(); return; }   // a tap away from a selection just drops it
   if (!d.moved) {
     const lim = reviewLimit();
     if (review < 0 || review > lim) { review = clamp(review, 0, lim); setFeel(["y"], 0.42, 1); retarget(); kick(); }
@@ -1519,6 +2477,8 @@ function endDrag(e) {
   kick();
 }
 stage.addEventListener("pointerup", endDrag);
+stage.addEventListener("dblclick", e => { const w = wordAround(boundaryAt(e.clientX, e.clientY)); if (w[0] < w[1]) setSel(w[0], w[1]); });
+stage.addEventListener("contextmenu", e => e.preventDefault());
 stage.addEventListener("pointercancel", endDrag);
 stage.addEventListener("wheel", e => {
   e.preventDefault(); coast = null;
@@ -1550,8 +2510,9 @@ document.addEventListener("keydown", e => {
 // ---------- Sheets ----------
 function openSheet(s, isNew, skipSave) {
   clearTimeout(saveTimer);
-  if (!skipSave && sheet.text.trim()) persist(true);
-  sheet = s; typist = new Typist(sheet.text); review = 0; coast = null;
+  if (!skipSave && filled(sheet)) persist(true);
+  clearSel(); undoStack.length = 0;
+  sheet = s; useMetrics(sheet); typist = new Typist(sheet.text); review = 0; coast = null;
   store.set("tw.current", sheet.id);
   retarget(true);
   if (isNew) {
@@ -1566,7 +2527,7 @@ function feedNew() {
   openSheet(newSheet(), true);
   setTyping(true);
 }
-function sheetName(s) { return (s.text.split("\n").find(l => l.trim()) || "").trim() || "New sheet"; }
+function sheetName(s) { return (s.title || "").trim() || (s.text.split("\n").find(l => l.trim()) || "").trim() || "New sheet"; }
 const wordCount = t => t.split(/\s+/).filter(Boolean).length;
 function thousands(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, "'"); }
 function updateMeta() {
@@ -1574,7 +2535,7 @@ function updateMeta() {
   const count = $("#count"), label = `${thousands(n)} / ${thousands(MAX_CHARS)}`;
   if (count.textContent.length !== label.length) forgetHudBoxes();
   count.textContent = label;
-  document.title = sheet.text.trim() ? `${sheetName(sheet)} · TypeWrite` : "TypeWrite by Jericho";
+  document.title = filled(sheet) ? `${sheetName(sheet)} · TypeWrite` : "TypeWrite by Jericho";
   stage.setAttribute("aria-label", sheet.text ? "Your sheet: " + sheet.text.slice(0, 2000) : "A blank sheet in a typewriter");
   placeGhost();
 }
@@ -1592,7 +2553,8 @@ function panelState(id) {
 function panelOpen() { return !!current; }
 function setInert(on) { [hud, stage, $("#dock"), keys, ghost].forEach(el => { el.inert = on; }); }
 function setExpanded(st, on) { document.querySelectorAll(`[aria-controls="${st.id}"]`).forEach(b => b.setAttribute("aria-expanded", String(on))); }
-const RENDER = { sheetsPanel: renderSheets, savePanel: renderSave, paperPanel: renderPickers, inkPanel: renderPickers, facePanel: renderPickers, flowerPanel: renderPickers };
+function renderTitle() { titleField.value = sheet.title || ""; setTimeout(() => titleField.focus({ preventScroll: true }), 60); }
+const RENDER = { titlePanel: renderTitle, sheetsPanel: renderSheets, savePanel: renderSave, paperPanel: renderPickers, inkPanel: renderPickers, facePanel: renderPickers, flowerPanel: renderPickers };
 function openPanel(id, opener) {
   if (typing) setTyping(false);
   if (current && current.id === id) { closePanel(); return; }
@@ -1756,6 +2718,12 @@ function renderPickers() {
     b.append(tileCanvas(150, 64, g => { paperFill(g, 150, 64, paperDef); g.fillStyle = ink.color; g.font = `30px "${f.family}"`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("Aa Qq", 75, 34); }),
              document.createTextNode(f.name));
   });
+  radioGroup($("#sizeSeg"), SIZES, "size", (b, z) => { b.className = "seg-btn"; b.textContent = z.name; });
+  radioGroup($("#alignSeg"), ALIGNS, "align", (b, a) => {
+    b.className = "seg-btn"; b.setAttribute("aria-label", a.name); b.title = a.name;
+    const rows = { left: [[4, 16], [4, 12], [4, 16], [4, 10]], center: [[4, 16], [6, 12], [4, 16], [7, 10]], right: [[4, 16], [8, 12], [4, 16], [10, 10]] }[a.id];
+    b.innerHTML = `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${rows.map(([x, w], i) => `<path d="M${x} ${6 + i * 4}h${w}"/>`).join("")}</svg>`;
+  });
   radioGroup($("#flowerTiles"), FLOWERS, "flower", (b, f) => {
     b.className = "tile"; b.setAttribute("aria-label", f.name);
     b.append(tileCanvas(100, 64, g => { paperFill(g, 100, 64, paperDef); if (f.id !== "none") drawFlower(g, f.id, 50, 32, 58, -16, sheet.seed); }), document.createTextNode(f.name));
@@ -1765,10 +2733,27 @@ function choose(key, value) {
   unlockAudio(); playKey();
   sheet[key] = value;
   const d = store.get("tw.defaults", {}); d[key] = value; store.set("tw.defaults", d);
-  if (sheet.text.trim()) persist(true);
-  if (GL && key === "face") GL.redrawAll();
-  renderPickers(); retarget(); kick(); placeGhost();
+  if (filled(sheet)) persist(true);
+  if (key === "size") { clearSel(); useMetrics(sheet); typist = new Typist(sheet.text); review = clamp(review, 0, reviewLimit()); }
+  if (GL && (key === "face" || key === "size" || key === "align")) GL.redrawAll();
+  renderPickers(); retarget(); kick(); placeGhost(); updateMeta();
 }
+// Select all, copy, cut, undo and delete work the same whether or not the machine is typing.
+document.addEventListener("keydown", e => {
+  if (panelOpen()) return;
+  const mod = (e.metaKey || e.ctrlKey) && !e.altKey, k = e.key.toLowerCase();
+  if (mod && k === "a") { e.preventDefault(); selectAll(); }
+  else if (mod && k === "c") { if (selText()) { e.preventDefault(); copySel(); } }
+  else if (mod && k === "x") { if (selText()) { e.preventDefault(); cutSel(); } }
+  else if (mod && k === "z" && !e.shiftKey) { e.preventDefault(); undoEdit(); }
+  else if (!typing && selRange() && (e.key === "Backspace" || e.key === "Delete")) { e.preventDefault(); deleteSel(); }
+  else if (e.key === "Escape") clearSel();
+});
+document.addEventListener("paste", e => {
+  if (e.target === keys || panelOpen()) return;
+  const text = e.clipboardData && e.clipboardData.getData("text/plain");
+  if (text) { e.preventDefault(); setTyping(true); strike(text); }
+});
 // Arrow keys move through a radio group and choose, like native radio buttons.
 document.addEventListener("keydown", e => {
   const group = e.target.closest && e.target.closest('[role="radiogroup"]');
@@ -1784,7 +2769,7 @@ let lastThrown = null;
 function fmtWhen(ts) { return new Date(ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); }
 function renderSheets() {
   const list = $("#sheetList"); list.innerHTML = "";
-  const all = [sheet, ...sheets.filter(s => s.id !== sheet.id)].filter(s => s.text.trim() || s.id === sheet.id);
+  const all = [sheet, ...sheets.filter(s => s.id !== sheet.id)].filter(s => filled(s) || s.id === sheet.id);
   for (const s of all) {
     const li = document.createElement("li"), isCurrent = s.id === sheet.id;
     li.className = "sheet-row"; li.setAttribute("aria-current", String(isCurrent));
@@ -1792,15 +2777,15 @@ function renderSheets() {
     const thumb = document.createElement("canvas"), k = Math.min(window.devicePixelRatio || 1, 3);
     thumb.width = Math.round(44 * k); thumb.height = Math.round(57 * k);
     const g = thumb.getContext("2d"), sc = 44 * k / PAPER_W; g.scale(sc, sc);
-    drawSheet(g, s, layoutChars(graphemes(s.text.slice(0, 1400))), 0, 0, 57 * k / sc, PAPER_W, 57 * k / sc, false);
+    useMetrics(s); drawSheet(g, s, layoutChars(graphemes(s.text.slice(0, 1400))), 0, 0, 57 * k / sc, PAPER_W, 57 * k / sc, false); useMetrics(sheet);
     const words = wordCount(s.text), info = document.createElement("span");
-    const name = document.createElement("span"); name.className = "sheet-name"; name.textContent = s.text.trim() ? sheetName(s) : "Blank sheet";
+    const name = document.createElement("span"); name.className = "sheet-name"; name.textContent = filled(s) ? sheetName(s) : "Blank sheet";
     const sub = document.createElement("span"); sub.className = "sheet-sub";
     sub.textContent = `${isCurrent ? "In the machine" : fmtWhen(s.updated)} · ${words === 1 ? "1 word" : words + " words"}`;
     info.append(name, sub); open.append(thumb, info);
     open.addEventListener("click", () => { if (!isCurrent) openSheet(s, false); closePanel(); });
     li.appendChild(open);
-    if (s.text.trim()) {
+    if (filled(s)) {
       const del = document.createElement("button"); del.type = "button"; del.className = "trash"; del.setAttribute("aria-label", "Throw away " + sheetName(s)); del.title = "Throw away";
       del.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
       del.addEventListener("click", () => throwAway(s));
@@ -1826,12 +2811,12 @@ function undoThrow() {
 
 // ---------- Downloads ----------
 function renderSave() {
-  const blank = !sheet.text.trim();
+  const blank = !filled(sheet);
   $("#savePng").disabled = blank; $("#saveTxt").disabled = blank;
   $("#saveNote").textContent = blank ? "Type something first, then come back to download it." : "The picture is the sheet exactly as it looks here: paper, ink and flower.";
 }
 function fileBase() {
-  const first = (sheet.text.split("\n").find(l => l.trim()) || "sheet").trim().slice(0, 40).replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase();
+  const first = sheetName(sheet).slice(0, 40).replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase();
   return "typewrite-" + (first || "sheet");
 }
 // Opened inside the Claude artifact viewer, files are offered through its save prompt;
@@ -1868,12 +2853,51 @@ function exportPng() {
   }, "image/png");
 }
 function exportTxt() {
-  saveBlob(new Blob([sheet.text.replace(/\s+$/, "") + "\n"], { type: "text/plain;charset=utf-8" }), fileBase() + ".txt")
+  const head = (sheet.title || "").trim() ? sheet.title.trim() + "\n\n" : "";
+  saveBlob(new Blob([head + sheet.text.replace(/\s+$/, "") + "\n"], { type: "text/plain;charset=utf-8" }), fileBase() + ".txt")
     .then(saved => { if (saved) toast("Saved the words."); });
 }
 
 // ---------- Wiring ----------
 $("#doneKey").addEventListener("click", () => setTyping(false));
+editBar.addEventListener("pointerdown", e => e.preventDefault());   // keep the typing field focused
+editBar.addEventListener("click", e => {
+  const cmd = e.target.closest("[data-cmd]"); if (!cmd || cmd.disabled) return;
+  ({ copy: copySel, cut: cutSel, delete: deleteSel, paste: pasteClipboard, all: selectAll })[cmd.dataset.cmd]();
+});
+// Reset asks twice, then clears every sheet and setting; Undo brings it all back for a few seconds.
+const resetRow = $("#resetRow");
+let resetTimer = 0, lastReset = null;
+function disarmReset() {
+  clearTimeout(resetTimer); resetRow.classList.remove("armed");
+  $("#resetLabel").textContent = "Reset everything"; $("#resetHint").textContent = "Erases every sheet and setting in this browser";
+}
+resetRow.addEventListener("click", () => {
+  if (!resetRow.classList.contains("armed")) {
+    resetRow.classList.add("armed"); $("#resetLabel").textContent = "Click again to erase everything";
+    $("#resetHint").textContent = "All your sheets, and paper, ribbon, type and sound settings";
+    resetTimer = setTimeout(disarmReset, 4000); return;
+  }
+  disarmReset(); closePanel(); resetAll();
+});
+function resetAll() {
+  persist(true);
+  lastReset = { sheets: readSheets(), current: sheet.id, defaults: store.get("tw.defaults", {}), sound: soundOn, buzz: buzzOn, lamp: lampOn };
+  sheets = []; store.set("tw.sheets", []); store.set("tw.defaults", {});
+  soundOn = true; store.set("tw.sound", true); soundKey.setAttribute("aria-pressed", "true"); soundToggle.checked = true;
+  buzzOn = true; store.set("tw.buzz", true); buzzToggle.checked = true;
+  setLamp(false);
+  openSheet(newSheet(), true, true); renderPickers();
+  toast("Everything is cleared.", { label: "Undo", run: undoReset });
+}
+function undoReset() {
+  const r = lastReset; if (!r) return; lastReset = null;
+  store.set("tw.sheets", r.sheets); store.set("tw.defaults", r.defaults); sheets = r.sheets;
+  soundOn = r.sound; store.set("tw.sound", r.sound); soundKey.setAttribute("aria-pressed", String(r.sound)); soundToggle.checked = r.sound;
+  buzzOn = r.buzz; store.set("tw.buzz", r.buzz); buzzToggle.checked = r.buzz;
+  setLamp(r.lamp);
+  openSheet(r.sheets.find(x => x.id === r.current) || newSheet(), false, true); renderPickers();
+}
 $("#newKey").addEventListener("click", feedNew);
 $("#sheetsKey").addEventListener("click", e => openPanel("sheetsPanel", e.currentTarget));
 $("#saveKey").addEventListener("click", e => openPanel("savePanel", e.currentTarget));
@@ -1881,6 +2905,13 @@ $("#paperKey").addEventListener("click", e => openPanel("paperPanel", e.currentT
 $("#inkKey").addEventListener("click", e => openPanel("inkPanel", e.currentTarget));
 $("#faceKey").addEventListener("click", e => openPanel("facePanel", e.currentTarget));
 $("#flowerKey").addEventListener("click", e => openPanel("flowerPanel", e.currentTarget));
+$("#titleKey").addEventListener("click", e => openPanel("titlePanel", e.currentTarget));
+titleField.addEventListener("input", () => {
+  sheet.title = sanitize(titleField.value).replace(/\n/g, " ").slice(0, 48); sheet.updated = Date.now(); persist();
+  if (GL) GL.redrawAll();
+  review = clamp(review, 0, reviewLimit()); retarget(); kick(); updateMeta();
+});
+titleField.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); closePanel(); } });
 $("#phoneRow").addEventListener("click", () => openPanel("phonePanel", $("#sheetsKey")));
 $("#savePng").addEventListener("click", () => { closePanel(); exportPng(); });
 $("#saveTxt").addEventListener("click", () => { closePanel(); exportTxt(); });
@@ -1920,7 +2951,7 @@ window.addEventListener("pagehide", () => persist(true));
 // Start once the typefaces are in, so the first letters land in the right face.
 (async () => {
   grainTile = makeGrain();
-  try { await Promise.all([document.fonts.load('17px "Courier Prime"'), document.fonts.load('16px "Special Elite"')]); } catch (e) {}
+  try { await Promise.all(FACES.map(f => document.fonts.load(`${f.size}px "${f.family}"`))); } catch (e) {}
   GL = await initGL();
   resize(); updateMeta();
   window.__tw = { get typist() { return typist; }, get sheet() { return sheet; }, get gl() { return !!GL; }, get busy() { return running; }, spring, strike, takeBack, setTyping, exportPng, exportTxt, layoutChars, graphemes, setLamp, openPanel };
