@@ -17,7 +17,7 @@ TypeWrite is a typewriter you use in the browser (and, from the same repository,
 
 ## Positioning
 
-The machine's behaviour is the product, not a typewriter font on a text box. There is a type guide that steps one cell per key along a rod, a paper roll that feeds a line at every Return, a margin bell, a fixed 30-column pitch with word wrap, per-letter ink that never changes once struck, and synthesized sounds of its own. The page is drawn in three.js (aged paper, ribbon weave, key dents, a desk lamp), and the downloaded sheet is drawn by the same shader.
+The machine's behaviour is the product, not a typewriter font on a text box. There is a type guide that steps one cell per key along a rod, a paper roll that feeds a line at every Return, a margin bell, a fixed 30-column pitch with word wrap, per-letter ink that never changes once struck, and the sounds of real manual typewriters (credited recordings). The page is drawn in three.js (aged paper, ribbon weave, key dents, a desk lamp), and the downloaded sheet is drawn by the same shader.
 
 ## Operating Context
 

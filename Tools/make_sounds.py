@@ -1,186 +1,252 @@
-"""Synthesizes TypeWrite's typewriter sounds from scratch (no samples, no licences).
+"""Builds TypeWrite's typewriter sounds from real, freely licensed recordings.
 
-Usage: python3 Tools/make_sounds.py TypeWrite/Resources/Sounds
+Usage: python3 Tools/make_sounds.py TypeWrite/Resources/Sounds [--cache DIR]
 
-Every sound is built from three ingredients a real machine makes:
-noise bursts (impacts), damped sines (the steel frame ringing) and short
-ticks (the escapement letting the carriage step).
+Needs numpy, scipy and the ffmpeg command (it decodes the Opus and MP3 sources).
+The recordings are downloaded once into the cache folder (a temp folder by
+default). Who made each one and under which licence is in CREDITS-Sounds.txt,
+next to the sounds.
+
+What each file is cut from:
+  key1-key4   four different letters struck on an Underwood 315 portable
+  space       the same machine's space bar: escapement tick, then the bar's hollow thump
+  backspace   the same machine: carriage pulled back a step, then the pawl dropping in
+  jam         an Olivetti Dora (the Underwood's twin) with two type bars colliding
+  bell        an antique machine's margin bell, with the keystroke under it filtered away
+  return      the same antique machine: line-space click, carriage sliding, the stop
+  feed        a platen knob rolled by hand: one detent click, then fast ratchet runs
+
+Every file is mono, 16-bit, 44.1 kHz, starts on its first transient (so a key
+sounds the moment it is pressed), and is levelled to sit with the others.
 """
+import argparse
+import hashlib
+import os
+import shutil
+import subprocess
 import sys
+import tempfile
+import time
+import urllib.request
+
 import numpy as np
 from scipy.io import wavfile
-from scipy.signal import butter, sosfilt
+from scipy.ndimage import uniform_filter
+from scipy.signal import butter, istft, sosfilt, stft
 
 SR = 44100
-OUT = sys.argv[1]
+DITHER = np.random.default_rng(7)  # fixed seed: the same sources always give the same files
+UA = "TypeWriteSoundBuilder/2.0 (https://github.com/MSreeGaneshNaik/typewrite; Tools/make_sounds.py)"
+
+COMMONS = "https://upload.wikimedia.org/wikipedia/commons/"
+JS_TYPEWRITER = "https://raw.githubusercontent.com/pbinkley/js-typewriter/4d9f5c31c2401939fcceb9bf8e4b8f57e8892473/sounds/"
+
+# name: (urls to try in order, sha256 of the first url when this script was written, quiet stretch for the noise print)
+SOURCES = {
+    # Sounds of Changes, recorded by Erik Pålsson. CC BY 3.0.
+    "underwood": ([COMMONS + "transcoded/b/bb/Underwood_315_portable_typewriter.webm/Underwood_315_portable_typewriter.webm.240p.vp9.webm",
+                   COMMONS + "b/bb/Underwood_315_portable_typewriter.webm"],
+                  "27847f01563c9b5994b83aa7519f731c6c89a723b96877c84e626ed635704306", (13.40, 14.90)),
+    "dora": ([COMMONS + "transcoded/d/da/Olivetti_Dora_portable_typewriter.webm/Olivetti_Dora_portable_typewriter.webm.240p.vp9.webm",
+              COMMONS + "d/da/Olivetti_Dora_portable_typewriter.webm"],
+             "4f8d31c4d4b3ff110d27f6a70b211fcb9e100d2f67e060b1a3c7a2e524be0c30", (12.70, 13.95)),
+    # Freesound 345955 by knufds, CC0, as cut by pbinkley/js-typewriter (CC0).
+    "knufds_bell": ([JS_TYPEWRITER + "345955__knufds__typewriter-bell.wav"],
+                    "9c281f19a2ef8f8c19679609c6064d5986954548700ac9b97b5bfe31baab8a2c", None),
+    "knufds_return": ([JS_TYPEWRITER + "345955__knufds__typewriter-carriage-reset.wav"],
+                      "40d4974c28ecef7ac0f05483a8d0d0dddcd49fc29676c21efa9d44a370857669", (1.60, 1.69)),
+    # pbinkley/js-typewriter scroll.wav, CC0 (its sounds come from monotraum, blukotek and knufds on Freesound, all CC0).
+    "scroll": ([JS_TYPEWRITER + "scroll.wav"],
+               "5e8892f85e93103b426868f22a372ec59a3cb704a41c117af4e70f47687e6ea0", (1.70, 1.84)),
+}
 
 
-def t_axis(seconds):
-    return np.arange(int(SR * seconds)) / SR
+# ---------- fetching and decoding ----------
+
+def download(url, tries=6):
+    for attempt in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            return urllib.request.urlopen(req, timeout=120).read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429:
+                return None
+        except (urllib.error.URLError, TimeoutError):
+            pass
+        time.sleep(10 * (attempt + 1))  # Wikimedia answers bursts with 429; it clears in a minute
+    return None
 
 
-def band(x, lo, hi, order=2):
-    sos = butter(order, [lo, hi], btype="band", fs=SR, output="sos")
-    return sosfilt(sos, x)
+def fetch(name, cache):
+    urls, sha, _ = SOURCES[name]
+    path = os.path.join(cache, name)
+    if not os.path.exists(path):
+        data = next((d for d in map(download, urls) if d), None)
+        if not data:
+            sys.exit(f"Could not download {name} from {urls}\n"
+                     f"(Wikimedia rate-limits busy networks: try again later, or save the file yourself as {path})")
+        with open(path, "wb") as f:
+            f.write(data)
+    if hashlib.sha256(open(path, "rb").read()).hexdigest() != sha:
+        print(f"  note: {name} is not the copy these cuts were measured on (re-encoded upstream?); "
+              "the cuts follow the attacks, but check the result")
+    return path
 
 
-def high(x, f, order=2):
+def decode(path):
+    """Any audio or video file -> mono float64 at SR."""
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vn", "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
+                         capture_output=True, check=True).stdout
+    return np.frombuffer(raw, np.float32).astype(np.float64)
+
+
+# ---------- cleaning ----------
+
+def highpass(x, f, order=2):
     return sosfilt(butter(order, f, btype="high", fs=SR, output="sos"), x)
 
 
-def low(x, f, order=2):
-    return sosfilt(butter(order, f, btype="low", fs=SR, output="sos"), x)
+def denoise(x, quiet, most_db=12.0, n=512):
+    """Light spectral gate: bins near the room's noise print are turned down by at most `most_db`."""
+    kw = dict(fs=SR, nperseg=n, noverlap=n * 3 // 4)
+    _, _, N = stft(quiet, **kw)
+    thresh = 2.0 * np.mean(np.abs(N), axis=1, keepdims=True)  # ~6 dB over the noise
+    _, _, X = stft(x, **kw)
+    floor = 10 ** (-most_db / 20)
+    open_ = np.clip(np.abs(X) / (thresh + 1e-12) - 1.0, 0.0, 1.0)  # 0 at the threshold, 1 at twice it
+    gain = uniform_filter(floor + (1 - floor) * open_, size=(3, 3))  # smoothed, so no "musical" noise
+    _, y = istft(X * gain, **kw)
+    return y[:len(x)]
 
 
-def burst(rng, length, decay, lo, hi, at=0.0, total=0.2):
-    """A filtered noise impact starting at `at` seconds."""
-    out = np.zeros(int(SR * total))
-    n = int(SR * length)
-    t = np.arange(n) / SR
-    env = np.exp(-t / decay) * (1 - np.exp(-t / 0.00025))
-    piece = band(rng.standard_normal(n), lo, hi) * env
-    start = int(SR * at)
-    end = min(start + n, len(out))
-    out[start:end] += piece[: end - start]
-    return out
-
-
-def ring(freqs, amps, decays, at=0.0, total=0.2, phase_rng=None):
-    """Damped sines: the frame or a bell ringing after a hit."""
-    out = np.zeros(int(SR * total))
-    start = int(SR * at)
-    t = np.arange(len(out) - start) / SR
-    for f, a, d in zip(freqs, amps, decays):
-        phase = phase_rng.uniform(0, 2 * np.pi) if phase_rng is not None else 0
-        out[start:] += a * np.sin(2 * np.pi * f * t + phase) * np.exp(-t / d) * (1 - np.exp(-t / 0.0004))
-    return out
-
-
-def finish(x, peak_db, fade=0.01):
-    x = x - np.mean(x)
-    n = int(SR * fade)
-    x[-n:] *= np.linspace(1, 0, n)
-    x = x / (np.max(np.abs(x)) + 1e-9) * (10 ** (peak_db / 20))
+def source(name, cache):
+    """Decoded, rumble-free, lightly de-noised recording."""
+    x = highpass(decode(fetch(name, cache)), 40)
+    quiet = SOURCES[name][2]
+    if quiet:
+        x = denoise(x, x[int(quiet[0] * SR):int(quiet[1] * SR)])
     return x
 
 
-def save(name, x):
-    wavfile.write(f"{OUT}/{name}.wav", SR, (np.clip(x, -1, 1) * 32767).astype(np.int16))
-    print(f"{name}.wav  {len(x) / SR * 1000:.0f} ms")
+# ---------- cutting and shaping ----------
+
+def snap(x, t, window=0.015):
+    """Time of the attack nearest `t`: the first sample within +-window reaching a quarter of the local peak."""
+    i0 = int((t - window) * SR)
+    seg = np.abs(x[i0:int((t + window) * SR)])
+    return (i0 + int(np.argmax(seg >= 0.25 * seg.max()))) / SR
 
 
-def key(seed):
-    rng = np.random.default_rng(seed)
-    total = 0.16
-    s = 1 + rng.uniform(-0.08, 0.08)
-    x = np.zeros(int(SR * total))
-    # Fingertip on the key top: tiny and bright.
-    x += 0.10 * burst(rng, 0.004, 0.0008, 3500, 9000, at=0.0, total=total)
-    # Type bar hitting the platen through the ribbon: the clack.
-    x += 1.00 * burst(rng, 0.03, 0.0035 * s, 1600, 7500, at=0.003, total=total)
-    x += 0.55 * burst(rng, 0.05, 0.009, 500, 2200, at=0.003, total=total)
-    # Steel frame and segment ringing briefly.
-    x += 0.10 * ring([310 * s, 640 * s, 1180 * s, 2950 * s], [0.9, 0.7, 0.45, 0.25],
-                     [0.030, 0.022, 0.016, 0.010], at=0.003, total=total, phase_rng=rng)
-    # Low thump of the desk.
-    x += 0.10 * ring([128 * s], [1.0], [0.018], at=0.004, total=total)
-    # Escapement lets the carriage step one space.
-    x += 0.32 * burst(rng, 0.006, 0.0012, 2800, 9500, at=0.021 + rng.uniform(-0.003, 0.003), total=total)
-    return finish(x, -5)
+def cut(x, start, end, attack=None):
+    """x[start:end] in seconds. With `attack`, the cut follows that attack if the source has shifted slightly."""
+    shift = snap(x, attack) - attack if attack is not None else 0.0
+    return x[int((start + shift) * SR):int((end + shift) * SR)].copy()
 
 
-def space():
-    rng = np.random.default_rng(91)
-    total = 0.17
-    x = 0.85 * burst(rng, 0.06, 0.010, 250, 1600, at=0.002, total=total)
-    x += 0.25 * burst(rng, 0.01, 0.002, 2000, 6000, at=0.002, total=total)
-    x += 0.16 * ring([170, 420, 900], [1.0, 0.5, 0.3], [0.03, 0.02, 0.012], at=0.003, total=total, phase_rng=rng)
-    x += 0.38 * burst(rng, 0.006, 0.0012, 2800, 9500, at=0.024, total=total)
-    return finish(x, -8)
+def fades(x, fade_in, fade_out):
+    n_in, n_out = int(fade_in * SR), int(fade_out * SR)
+    if n_in:
+        x[:n_in] *= 0.5 - 0.5 * np.cos(np.linspace(0, np.pi, n_in))
+    if n_out:
+        x[-n_out:] *= 0.5 + 0.5 * np.cos(np.linspace(0, np.pi, n_out))
+    return x
 
 
-def backspace():
-    rng = np.random.default_rng(57)
-    total = 0.12
-    x = 0.7 * burst(rng, 0.02, 0.004, 900, 5000, at=0.002, total=total)
-    x += 0.5 * burst(rng, 0.006, 0.0012, 3000, 9000, at=0.030, total=total)
-    x += 0.08 * ring([520, 1300], [1, 0.5], [0.02, 0.01], at=0.002, total=total, phase_rng=rng)
-    return finish(x, -9)
+def join(a, b, overlap):
+    """Equal-power crossfade of b onto the end of a."""
+    n = int(overlap * SR)
+    t = np.linspace(0, np.pi / 2, n)
+    mid = a[-n:] * np.cos(t) + b[:n] * np.sin(t)
+    return np.concatenate([a[:-n], mid, b[n:]])
 
 
-def bell():
-    rng = np.random.default_rng(3)
-    total = 1.5
-    f0 = 1765.0
-    # Partials of a small steel dome bell, with a detuned twin for shimmer.
-    x = ring([f0, f0 * 1.0035, f0 * 2.32, f0 * 4.25, f0 * 6.63],
-             [1.0, 0.35, 0.42, 0.22, 0.10],
-             [0.95, 0.80, 0.45, 0.22, 0.12], at=0.002, total=total, phase_rng=rng)
-    # The clapper's tap.
-    x += 0.5 * burst(rng, 0.008, 0.0015, 2500, 9000, at=0.001, total=total)
-    return finish(x, -4, fade=0.05)
+def loudest_50ms(x):
+    n = int(0.05 * SR)
+    return 10 * np.log10(np.convolve(x * x, np.ones(n) / n, "valid").max() + 1e-12)
 
 
-def carriage_return():
-    rng = np.random.default_rng(11)
-    total = 0.62
-    x = np.zeros(int(SR * total))
-    # Lever pushed: the line-space ratchet clicks twice.
-    x += 0.55 * burst(rng, 0.012, 0.0025, 1800, 8000, at=0.004, total=total)
-    x += 0.45 * burst(rng, 0.012, 0.0025, 1800, 8000, at=0.040, total=total)
-    # The carriage sliding back on its rails.
-    n = int(SR * 0.36)
-    t = np.arange(n) / SR
-    slide_env = np.sin(np.pi * np.clip(t / 0.36, 0, 1)) ** 1.5
-    slide = band(rng.standard_normal(n), 700, 3200) * slide_env * 0.22
-    start = int(SR * 0.06)
-    x[start:start + n] += slide
-    # Escapement teeth rattling past, slowing as it travels.
-    tick_time = 0.07
-    gap = 0.010
-    while tick_time < 0.40:
-        x += 0.12 * burst(rng, 0.004, 0.0008, 3000, 9500, at=tick_time, total=total)
-        tick_time += gap
-        gap *= 1.06
-    # Hitting the margin stop.
-    x += 1.0 * burst(rng, 0.05, 0.008, 300, 2400, at=0.43, total=total)
-    x += 0.5 * burst(rng, 0.02, 0.003, 2000, 7000, at=0.43, total=total)
-    x += 0.18 * ring([140, 360, 820], [1.0, 0.6, 0.35], [0.05, 0.03, 0.02], at=0.432, total=total, phase_rng=rng)
-    return finish(x, -4)
+def level(x, target_db, peak_db=-3.0):
+    """Sets the loudest 50 ms to `target_db` RMS, but never lets a peak pass `peak_db`."""
+    g = 10 ** ((target_db - loudest_50ms(x)) / 20)
+    peak = np.max(np.abs(x)) * g
+    if peak > 10 ** (peak_db / 20):
+        g *= 10 ** (peak_db / 20) / peak
+    return x * g
 
 
-def paper_feed():
-    rng = np.random.default_rng(23)
-    total = 0.9
-    x = np.zeros(int(SR * total))
-    # Paper rustle around the platen.
-    n = int(SR * 0.75)
-    t = np.arange(n) / SR
-    rustle = low(high(rng.standard_normal(n), 900), 6000)
-    flutter = 0.55 + 0.45 * np.abs(np.sin(2 * np.pi * 7 * t + rng.uniform(0, 6)))
-    env = np.sin(np.pi * np.clip(t / 0.75, 0, 1))
-    x[int(SR * 0.04):int(SR * 0.04) + n] += rustle * flutter * env * 0.25
-    # The platen knob's ratchet.
-    tick_time = 0.05
-    while tick_time < 0.78:
-        x += 0.35 * burst(rng, 0.006, 0.0011, 2200, 9000, at=tick_time, total=total)
-        tick_time += 0.052 + rng.uniform(-0.006, 0.006)
-    return finish(x, -7, fade=0.04)
+def save(out, name, x):
+    dither = (DITHER.random(len(x)) - DITHER.random(len(x))) / 32768  # TPDF, 1 LSB
+    pcm = np.clip(np.round((x + dither) * 32767), -32768, 32767).astype(np.int16)
+    wavfile.write(os.path.join(out, f"{name}.wav"), SR, pcm)
+    print(f"{name}.wav  {len(x) / SR * 1000:4.0f} ms  peak {20 * np.log10(np.max(np.abs(x))):5.1f} dBFS  "
+          f"loudest 50 ms {loudest_50ms(x):5.1f} dB")
 
 
-def jam():
-    rng = np.random.default_rng(5)
-    total = 0.2
-    x = 0.8 * burst(rng, 0.03, 0.006, 200, 1200, at=0.002, total=total)
-    x += 0.2 * ring([95, 230], [1, 0.4], [0.04, 0.02], at=0.002, total=total)
-    return finish(x, -10)
+# ---------- the ten sounds ----------
+
+def key(uw, attack, trim_db):
+    """One letter: slug through ribbon into the platen, the type bar's ring, the body thud under it.
+    Starts 3 ms before the attack. The finger's tick on the key top comes ~40 ms earlier on the real
+    machine and is left out, so the clack is not late."""
+    x = cut(uw, attack - 0.003, attack + 0.237, attack)
+    return level(fades(x, 0.001, 0.06), -24.5 + trim_db, peak_db=-2.0)
 
 
-for i in range(4):
-    save(f"key{i + 1}", key(100 + i * 17))
-save("space", space())
-save("backspace", backspace())
-save("bell", bell())
-save("return", carriage_return())
-save("feed", paper_feed())
-save("jam", jam())
+def build(out, cache):
+    uw = source("underwood", cache)
+    dora = source("dora", cache)
+
+    # Four letters with different type bars: rings near 3.9/4.2/5.3 kHz, 2.0/2.8/3.4 kHz,
+    # 1.0/3.2/4.0 kHz (the lightest blow) and 1.7/3.3/3.8 kHz (the longest ring).
+    # A little of the natural difference in force is kept.
+    for i, (attack, trim) in enumerate([(4.3348, 0.0), (7.0859, -0.4), (10.5478, -1.0), (9.7984, -0.5)]):
+        save(out, f"key{i + 1}", key(uw, attack, trim))
+
+    # Space bar: escapement tick, then the bar bottoming with a hollow thump 15-50 ms in.
+    save(out, "space", level(fades(cut(uw, 4.7135, 4.8750, 4.7170), 0.001, 0.04), -26.5))
+
+    # Backspace: the carriage dragged back a step (clack and thump), then the pawl
+    # dropping into the rack as the key comes up ~140 ms later.
+    save(out, "backspace", level(fades(cut(uw, 9.4275, 9.6650, 9.4320), 0.001, 0.05), -27.0))
+
+    # Margin bell. The source has a keystroke under the ding; a 4th-order high-pass at
+    # 3 kHz removes it and leaves the bell's partials (a beating 4.75/4.82 kHz pair,
+    # a 9.5 kHz pair and a bright 12.1 kHz partial that dies first).
+    bell = decode(fetch("knufds_bell", cache))
+    bell = highpass(bell, 3000, order=4)
+    bell = cut(bell, 0.0915, 0.8500, 0.0945)
+    save(out, "bell", level(fades(bell, 0.0005, 0.20), -16.0, peak_db=-2.0))
+
+    # Carriage return: line-space ratchet click, the carriage sliding back with the escapement
+    # buzzing over the rack, and the heavy clunk at the margin stop with a small rebound.
+    # 70 ms of the pause after the click and 150 ms of the slide are taken out, so the slide
+    # starts 0.1 s in, the stop lands at 0.6 s and the file stays under 1.2 s.
+    ret = source("knufds_return", cache)
+    click = cut(ret, 0.2700, 0.3400, 0.2800)
+    slide = cut(ret, 0.4100, 0.7800)
+    stop = cut(ret, 0.9300, 1.6000)
+    ret = join(join(click, slide, 0.02), stop, 0.04)
+    save(out, "return", level(fades(ret, 0.002, 0.08), -17.5, peak_db=-1.5))
+
+    # Paper feed: a single detent click first (0-45 ms, usable on its own as a ratchet tick),
+    # then the knob rolled in bursts of clicks ~20 ms apart.
+    sc = source("scroll", cache)
+    click = fades(cut(sc, 2.1300, 2.1800, 2.1400), 0.001, 0.015)
+    roll = fades(cut(sc, 1.0880, 2.1000), 0.002, 0.06)
+    save(out, "feed", level(np.concatenate([click, np.zeros(int(0.012 * SR)), roll]), -22.0))
+
+    # Jam: two type bars rising together and locking short of the platen (two dull clacks
+    # 25 ms apart, no platen ring), then the typist's key knocking them free.
+    save(out, "jam", level(fades(cut(dora, 7.3120, 7.5750, 7.3200), 0.001, 0.06), -26.0))
+
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("out", help="folder for the .wav files, e.g. TypeWrite/Resources/Sounds")
+    p.add_argument("--cache", default=os.path.join(tempfile.gettempdir(), "typewrite-sound-sources"),
+                   help="where downloaded recordings are kept between runs")
+    args = p.parse_args()
+    if not shutil.which("ffmpeg"):
+        sys.exit("make_sounds.py needs the ffmpeg command (brew install ffmpeg / apt install ffmpeg).")
+    os.makedirs(args.cache, exist_ok=True)
+    build(args.out, args.cache)
