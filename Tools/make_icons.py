@@ -8,6 +8,7 @@ Pure vector: paths, circles, gradients and clip paths. No filters, no bitmaps.
 
 Usage: python3 Tools/make_icons.py Branding
 """
+import os
 import random
 import sys
 
@@ -152,3 +153,21 @@ with open(f"{OUT}/AppIcon.svg", "w") as f:
 with open(f"{OUT}/JerichoTile.svg", "w") as f:
     f.write(tile())
 print("wrote AppIcon.svg and JerichoTile.svg")
+
+# The Mac app's icon: macOS doesn't round icons for you (iOS does), so the Mac sizes come from
+# the rounded tile, which already follows Apple's macOS grid (824 px body, 100 px margin).
+import json, shutil, subprocess
+iconset = os.path.join(os.path.dirname(os.path.abspath(OUT)), "TypeWrite", "Assets.xcassets", "AppIcon.appiconset")
+if shutil.which("rsvg-convert") and os.path.isdir(iconset):
+    images = [{"filename": "AppIcon.png", "idiom": "universal", "platform": "ios", "size": "1024x1024"}]
+    for points in (16, 32, 128, 256, 512):
+        for scale in (1, 2):
+            px = points * scale
+            name = f"mac-{points}@{scale}x.png"
+            subprocess.run(["rsvg-convert", "-w", str(px), "-h", str(px), "-o", os.path.join(iconset, name), f"{OUT}/JerichoTile.svg"], check=True)
+            images.append({"filename": name, "idiom": "mac", "scale": f"{scale}x", "size": f"{points}x{points}"})
+    with open(os.path.join(iconset, "Contents.json"), "w") as f:
+        json.dump({"images": images, "info": {"author": "xcode", "version": 1}}, f, indent=2)
+        f.write("\n")
+    subprocess.run(["rsvg-convert", "-w", "1024", "-h", "1024", "-o", f"{OUT}/JerichoTile.png", f"{OUT}/JerichoTile.svg"], check=True)
+    print("wrote the Mac icon sizes and JerichoTile.png")
