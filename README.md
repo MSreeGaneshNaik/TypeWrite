@@ -110,7 +110,7 @@ swift test             # the typing engine's tests
 | [`TypeWrite/Feel`](TypeWrite/Feel) | The sound engine, haptics and font loading |
 | [`TypeWrite/Look`](TypeWrite/Look) | Paper texture, sheet drawing, pressed flowers, the Jericho mark and the theme |
 | [`TypeWrite/Views`](TypeWrite/Views) | The desk, the typewriter, the settings sheet and key capture |
-| [`TypeWrite/Resources`](TypeWrite/Resources) | The synthesized sounds and the two typefaces with their licences |
+| [`TypeWrite/Resources`](TypeWrite/Resources) | The typewriter sounds (with their credits) and the typefaces with their licences |
 | [`index.html`](index.html) | The browser version: one file, served by GitHub Pages from the repository root |
 | [`vendor/three`](vendor/three) | three.js r160 (MIT), the only third-party code, vendored so the page never depends on a CDN |
 | [`DESIGN.md`](DESIGN.md) · [`PRODUCT.md`](PRODUCT.md) | How the browser version looks, moves and sounds, and who it is for |
@@ -121,4 +121,4 @@ swift test             # the typing engine's tests
 
 ## Credits
 
-TypeWrite is made by Jericho, and the petal mark is Jericho's. The idea of a typewriter notes app was inspired by Platen; TypeWrite is an independent, from-scratch implementation with its own code, art and sounds. The sounds are synthesized from scratch by `Tools/make_sounds.py`. Typefaces: Courier Prime (SIL Open Font License 1.1) and Special Elite (Apache License 2.0). The browser version uses [three.js](https://threejs.org) (MIT).
+TypeWrite is made by Jericho, and the petal mark is Jericho's. The idea of a typewriter notes app was inspired by Platen; TypeWrite is an independent, from-scratch implementation with its own code, art and sounds. The sounds are cut from real manual typewriters by `Tools/make_sounds.py`: the keys, space, backspace and jam are Erik Pålsson's recordings of an Underwood 315 and an Olivetti Dora for [Sounds of Changes](http://www.soundsofchanges.eu) (CC BY 4.0); the bell, return and paper feed are CC0 recordings by knufds and others via [js-typewriter](https://github.com/pbinkley/js-typewriter). Full credits are in [`CREDITS-Sounds.txt`](TypeWrite/Resources/Sounds/CREDITS-Sounds.txt). Typefaces: Courier Prime and Cutive Mono and Lekton (SIL Open Font License 1.1), and Special Elite (Apache License 2.0). The browser version uses [three.js](https://threejs.org) (MIT).
