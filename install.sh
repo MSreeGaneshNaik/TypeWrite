@@ -1,19 +1,22 @@
 #!/bin/bash
 # TypeWrite installer — https://github.com/MSreeGaneshNaik/TypeWrite
-# Downloads the source, builds TypeWrite on this Mac with Xcode, and installs it on
-# your iPhone (plugged in and trusted) or, without one, in the iPhone Simulator.
-# Run it again any time: it checks what you have against GitHub and only
+# Downloads the source, builds TypeWrite on this Mac with Xcode, and installs it
+# as a Mac app in Applications, and on your iPhone too when one is plugged in and
+# trusted. Run it again any time: it checks what you have against GitHub and only
 # rebuilds when something changed. On an iPhone signed with a free Apple ID it
 # also re-signs before iOS's 7-day limit runs out.
 #   TYPEWRITE_FORCE=1           rebuild even when up to date
-#   TYPEWRITE_TARGET=simulator  always use the Simulator
-#   TYPEWRITE_TARGET=iphone     insist on a plugged-in iPhone
+#   TYPEWRITE_TARGET=mac        only the Mac app
+#   TYPEWRITE_TARGET=iphone     only the iPhone, and insist on one being plugged in
+#   TYPEWRITE_TARGET=simulator  only the iPhone Simulator
+#   TYPEWRITE_APPS=~/Applications  put the Mac app in this folder instead of /Applications
 #   TYPEWRITE_TEAM=XXXXXXXXXX   sign with this Apple team instead of the one Xcode uses
 set -euo pipefail
 
 REPO="MSreeGaneshNaik/TypeWrite"
 BRANCH="${TYPEWRITE_BRANCH:-main}"
 BUNDLE="com.jericho.typewrite"
+MAC_BUNDLE="maccatalyst.${BUNDLE}"   # Xcode's id for the Mac (Mac Catalyst) build of the same app
 STATE_DIR="${HOME}/Library/Application Support/TypeWrite"
 REFRESH_DAYS=6
 
@@ -181,6 +184,41 @@ find_simulator() {
   rm -f "${list}"
 }
 
+# A path as people write it: ~/Applications rather than /Users/ann/Applications.
+pretty() { case "$1" in "${HOME}"/*) printf '~%s' "${1#"${HOME}"}" ;; *) printf '%s' "$1" ;; esac; }
+
+# A place TypeWrite goes, in words: "This Mac", the iPhone's name, "The Simulator".
+place() {
+  case "$1" in
+    mac) printf 'This Mac' ;;
+    iphone) printf '%s' "${device_name:0:24}" ;;
+    simulator) printf 'The Simulator' ;;
+  esac
+}
+
+# "On this Mac and Ann's iPhone." for the last card (kept under 44 characters).
+places() {
+  local out="" t name
+  for t in "$@"; do
+    case "${t}" in mac) name="this Mac" ;; iphone) name="${device_name:0:18}" ;; simulator) name="the Simulator" ;; esac
+    if [ -z "${out}" ]; then out="${name}"; else out="${out} and ${name}"; fi
+  done
+  printf 'On %s.' "${out}"
+}
+
+# Opens TypeWrite in one place. Returns 1 if it couldn't (an iPhone that doesn't trust the developer yet).
+launch() {
+  case "$1" in
+    mac) open "${mac_app}" >/dev/null 2>&1 || open -b "${MAC_BUNDLE}" >/dev/null 2>&1 || true ;;
+    iphone) xcrun devicectl device process launch --device "${device_id}" "${iphone_bundle}" >/dev/null 2>&1 </dev/null || return 1 ;;
+    simulator)
+      xcrun simctl boot "${sim_udid}" >/dev/null 2>&1 </dev/null || true
+      open -a Simulator --args -CurrentDeviceUDID "${sim_udid}" >/dev/null 2>&1 || true
+      xcrun simctl launch "${sim_udid}" "${BUNDLE}" >/dev/null 2>&1 </dev/null || true ;;
+  esac
+  return 0
+}
+
 # Everything runs from main, so bash has read the whole script before any of it runs:
 # a download cut off half-way does nothing instead of running half an installer.
 main() {
@@ -201,7 +239,7 @@ main() {
   if [ -n "${latest}" ]; then ok "Latest is ${short}."; else why "GitHub didn't answer (offline or busy), so this installs the newest code."; fi
 
   step "Checking for Xcode"
-  why "iPhone apps are built with Xcode, Apple's free developer app."
+  why "TypeWrite is built with Xcode, Apple's free developer app."
   developer="$(find_xcode)"
   if [ -z "${developer}" ]; then
     why "Xcode isn't installed. Opening it in the Mac App Store…"
@@ -220,8 +258,27 @@ main() {
   ok "Found ${xcode_version}."
 
   step "Choosing where to install"
-  target="simulator"; device_id=""; device_udid=""; device_name=""; sim_udid=""; sim_name=""; team=""
-  if [ "${TYPEWRITE_TARGET:-}" != "simulator" ]; then
+  want="${TYPEWRITE_TARGET:-everywhere}"
+  case "${want}" in everywhere|mac|iphone|simulator) ;; *) die "TYPEWRITE_TARGET can be mac, iphone or simulator (not '${want}')." ;; esac
+  targets=(); device_id=""; device_udid=""; device_name=""; sim_udid=""; sim_name=""; team=""; iphone_bundle=""
+
+  # The Mac app: this Mac, in Applications. It runs the iPhone app's code through Mac Catalyst.
+  if [ "${want}" = "everywhere" ] || [ "${want}" = "mac" ]; then
+    if [ "$(sw_vers -productVersion | cut -d. -f1)" -ge 14 ]; then
+      apps_dir="${TYPEWRITE_APPS:-/Applications}"
+      [ -d "${apps_dir}" ] && [ -w "${apps_dir}" ] || { apps_dir="${HOME}/Applications"; mkdir -p "${apps_dir}"; }
+      mac_app="${apps_dir}/TypeWrite.app"
+      targets+=("mac")
+      ok "This Mac, in $(pretty "${apps_dir}")."
+    elif [ "${want}" = "mac" ]; then
+      die "The Mac app needs macOS 14 Sonoma or later (this Mac has $(sw_vers -productVersion))."
+    else
+      warn "The Mac app needs macOS 14 Sonoma or later, so it's skipped on this Mac."
+    fi
+  fi
+
+  # The iPhone: plugged in, unlocked, trusted, Developer Mode on, and an Apple ID in Xcode to sign with.
+  if [ "${want}" = "everywhere" ] || [ "${want}" = "iphone" ]; then
     iphone="$(find_iphone)"
     if [ -n "${iphone}" ]; then
       IFS=$'\t' read -r device_id device_udid device_name devmode <<<"${iphone}"
@@ -231,23 +288,21 @@ main() {
       elif [ -z "${team}" ]; then
         warn "Xcode has no Apple ID to sign with. Add yours (a free one works): Xcode → Settings → Accounts → +."
       else
-        target="iphone"
+        # Free teams can't share an app ID, so each team gets its own.
+        iphone_bundle="${BUNDLE}.$(printf '%s' "${team}" | tr '[:upper:]' '[:lower:]')"
+        targets+=("iphone")
+        ok "${device_name}, signed by Apple team ${team}."
       fi
-    elif [ "${TYPEWRITE_TARGET:-}" = "iphone" ]; then
+      if [ "${want}" = "iphone" ] && [ -z "${iphone_bundle}" ]; then die "Fix the step above, then paste the same command again."; fi
+    elif [ "${want}" = "iphone" ]; then
       die "No iPhone found. Plug it in with a cable, unlock it, tap Trust, then paste the same command again."
-    fi
-    if [ "${target}" != "iphone" ] && [ "${TYPEWRITE_TARGET:-}" = "iphone" ]; then
-      die "Fix the step above, then paste the same command again."
+    else
+      why "Plug in your iPhone and run this again to put TypeWrite on it too."
     fi
   fi
 
-  if [ "${target}" = "iphone" ]; then
-    ok "Installing on ${device_name}, signed by Apple team ${team}."
-    # Free teams can't share an app ID, so each team gets its own.
-    bundle="${BUNDLE}.$(printf '%s' "${team}" | tr '[:upper:]' '[:lower:]')"
-    key="iphone-${device_udid}"
-  else
-    [ -n "${device_name}" ] && why "Using the Simulator instead. Run this again once ${device_name} is ready."
+  # The iPhone Simulator: only when asked for.
+  if [ "${want}" = "simulator" ]; then
     sim="$(find_simulator)"
     if [ -z "${sim}" ]; then
       why "No iPhone Simulator is installed yet. Xcode can download one (about 8 GB)."
@@ -255,44 +310,47 @@ main() {
         xcodebuild -downloadPlatform iOS </dev/null || die "The download didn't finish. Paste the same command again to retry."
         sim="$(find_simulator)"
       fi
-      [ -n "${sim}" ] || die "Plug in your iPhone, or install the Simulator: Xcode → Settings → Components → iOS. Then paste the same command again."
+      [ -n "${sim}" ] || die "Install the Simulator: Xcode → Settings → Components → iOS. Then paste the same command again."
     fi
     IFS=$'\t' read -r sim_udid sim_name sim_os <<<"${sim}"
-    ok "Installing in the Simulator on ${sim_name} (iOS ${sim_os})."
-    bundle="${BUNDLE}"
-    key="simulator-${sim_udid}"
+    targets+=("simulator")
+    ok "The Simulator on ${sim_name} (iOS ${sim_os})."
   fi
+  [ "${#targets[@]}" -gt 0 ] || die "There's nowhere to install TypeWrite. Plug in your iPhone (or update this Mac to macOS 14), then paste the same command again."
 
-  # What was installed here last time: the commit and when it was signed.
-  state="${STATE_DIR}/${key}"
-  installed=""; installed_at=0
-  if [ -f "${state}" ]; then read -r installed installed_at <"${state}" || true; fi
-  age_days=$(( ($(date +%s) - ${installed_at:-0}) / 86400 ))
-  present=1
-  if [ "${target}" = "simulator" ] && ! xcrun simctl get_app_container "${sim_udid}" "${bundle}" >/dev/null 2>&1 </dev/null; then
-    present=0
-  fi
-
-  if [ -n "${latest}" ] && [ "${installed}" = "${latest}" ] && [ "${present}" = 1 ] && [ "${TYPEWRITE_FORCE:-0}" != "1" ] \
-     && { [ "${target}" = "simulator" ] || [ "${age_days}" -lt "${REFRESH_DAYS}" ]; }; then
-    ok "You already have ${short}, the latest."
-    if [ "${target}" = "simulator" ]; then
-      xcrun simctl boot "${sim_udid}" >/dev/null 2>&1 </dev/null || true
-      open -a Simulator --args -CurrentDeviceUDID "${sim_udid}" >/dev/null 2>&1 || true
-      xcrun simctl launch "${sim_udid}" "${bundle}" >/dev/null 2>&1 </dev/null || true
-    else
-      xcrun devicectl device process launch --device "${device_id}" "${bundle}" >/dev/null 2>&1 </dev/null || true
+  # What each place has now: the commit it was built from and when it was signed.
+  todo=(); updating=0
+  for t in "${targets[@]}"; do
+    present=1; refresh=0
+    case "${t}" in
+      mac)       key="mac"; [ -d "${mac_app}" ] || present=0 ;;
+      iphone)    key="iphone-${device_udid}"; refresh=1 ;;
+      simulator) key="simulator-${sim_udid}"
+                 xcrun simctl get_app_container "${sim_udid}" "${BUNDLE}" >/dev/null 2>&1 </dev/null || present=0 ;;
+    esac
+    installed=""; installed_at=0
+    if [ -f "${STATE_DIR}/${key}" ]; then read -r installed installed_at <"${STATE_DIR}/${key}" || true; fi
+    age_days=$(( ($(date +%s) - ${installed_at:-0}) / 86400 ))
+    if [ -n "${latest}" ] && [ "${installed}" = "${latest}" ] && [ "${present}" = 1 ] && [ "${TYPEWRITE_FORCE:-0}" != "1" ] \
+       && { [ "${refresh}" = 0 ] || [ "${age_days}" -lt "${REFRESH_DAYS}" ]; }; then
+      ok "$(place "${t}") already has ${short}, the latest."
+      continue
     fi
+    todo+=("${t}")
+    [ -n "${installed}" ] && [ "${present}" = 1 ] && updating=1
+    if [ -z "${installed}" ] || [ "${present}" = 0 ]; then why "$(place "${t}"): TypeWrite isn't there yet, so it will be built and installed."
+    elif [ -z "${latest}" ]; then why "$(place "${t}"): without an answer from GitHub, it reinstalls the newest code to be safe."
+    elif [ "${installed}" = "unknown" ]; then why "$(place "${t}"): installed while GitHub was unreachable, so it will be updated to ${short}."
+    elif [ "${installed}" != "${latest}" ]; then why "$(place "${t}"): you have ${installed:0:7}, so it will be updated to ${short}."
+    elif [ "${TYPEWRITE_FORCE:-0}" = "1" ]; then why "$(place "${t}"): already the latest, but TYPEWRITE_FORCE=1 asks for a rebuild anyway."
+    else why "$(place "${t}"): signed ${age_days} days ago. A free Apple ID's apps stop opening after 7 days, so it's re-signed now."
+    fi
+  done
+
+  if [ "${#todo[@]}" -eq 0 ]; then
+    for t in "${targets[@]}"; do launch "${t}" || true; done
     card "TypeWrite is up to date" "Nothing to download or rebuild."
     exit 0
-  fi
-  if [ -z "${installed}" ]; then why "TypeWrite isn't installed here yet, so it will be downloaded and built."
-  elif [ -z "${latest}" ]; then why "Without an answer from GitHub, it reinstalls the newest code to be safe."
-  elif [ "${installed}" = "unknown" ]; then why "Your copy was installed while GitHub was unreachable, so it will be updated to ${short}."
-  elif [ "${installed}" != "${latest}" ]; then why "You have ${installed:0:7}, so it will be updated to ${short}."
-  elif [ "${present}" = 0 ]; then why "TypeWrite was removed from this Simulator, so it will be reinstalled."
-  elif [ "${TYPEWRITE_FORCE:-0}" = "1" ]; then why "Already the latest, but TYPEWRITE_FORCE=1 asks for a rebuild anyway."
-  else why "Signed ${age_days} days ago. A free Apple ID's apps stop opening after 7 days, so it's re-signed now."
   fi
 
   TMP="$(mktemp -d)"
@@ -308,48 +366,74 @@ main() {
   step "Building TypeWrite"
   why "Xcode compiles it on this Mac. The first build takes a few minutes; updates are quicker."
   derived="${STATE_DIR}/DerivedData"
-  if [ "${target}" = "iphone" ]; then
-    bar 180 xcodebuild -project "${src}/TypeWrite.xcodeproj" -scheme TypeWrite -configuration Release \
-      -destination "id=${device_udid}" -derivedDataPath "${derived}" -allowProvisioningUpdates \
-      DEVELOPMENT_TEAM="${team}" PRODUCT_BUNDLE_IDENTIFIER="${bundle}" CODE_SIGN_STYLE=Automatic build \
-      || die "The build failed (full log: ${LOG}). If it mentions signing, open Xcode → Settings → Accounts and check your Apple ID, then try again."
-    app="${derived}/Build/Products/Release-iphoneos/TypeWrite.app"
-  else
-    bar 150 xcodebuild -project "${src}/TypeWrite.xcodeproj" -scheme TypeWrite -configuration Release \
-      -destination "id=${sim_udid}" -derivedDataPath "${derived}" build \
-      || die "The build failed. The full log is at ${LOG}"
-    app="${derived}/Build/Products/Release-iphonesimulator/TypeWrite.app"
-  fi
-  [ -d "${app}" ] || die "The build finished but TypeWrite.app wasn't where Xcode puts it (${app})."
+  project=(-project "${src}/TypeWrite.xcodeproj" -scheme TypeWrite -configuration Release -derivedDataPath "${derived}")
+  for t in "${todo[@]}"; do
+    case "${t}" in
+      mac)
+        why "For this Mac. It's signed to run on this Mac only, so no Apple ID is needed."
+        bar 200 xcodebuild "${project[@]}" -destination 'platform=macOS,variant=Mac Catalyst' \
+          CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= build \
+          || die "The Mac build failed. The full log is at ${LOG}"
+        mac_built="${derived}/Build/Products/Release-maccatalyst/TypeWrite.app"
+        [ -d "${mac_built}" ] || die "The build finished but the Mac app wasn't where Xcode puts it (${mac_built})." ;;
+      iphone)
+        why "For ${device_name}."
+        bar 180 xcodebuild "${project[@]}" -destination "id=${device_udid}" -allowProvisioningUpdates \
+          DEVELOPMENT_TEAM="${team}" PRODUCT_BUNDLE_IDENTIFIER="${iphone_bundle}" CODE_SIGN_STYLE=Automatic build \
+          || die "The iPhone build failed (full log: ${LOG}). If it mentions signing, open Xcode → Settings → Accounts and check your Apple ID, then try again."
+        iphone_built="${derived}/Build/Products/Release-iphoneos/TypeWrite.app"
+        [ -d "${iphone_built}" ] || die "The build finished but the iPhone app wasn't where Xcode puts it (${iphone_built})." ;;
+      simulator)
+        why "For the Simulator."
+        bar 150 xcodebuild "${project[@]}" -destination "id=${sim_udid}" build \
+          || die "The Simulator build failed. The full log is at ${LOG}"
+        sim_built="${derived}/Build/Products/Release-iphonesimulator/TypeWrite.app"
+        [ -d "${sim_built}" ] || die "The build finished but the Simulator app wasn't where Xcode puts it (${sim_built})." ;;
+    esac
+  done
 
   step "Installing"
-  if [ "${target}" = "iphone" ]; then
-    why "Copying TypeWrite to ${device_name} over the cable. Keep it unlocked."
-    bar 25 xcrun devicectl device install app --device "${device_id}" "${app}" \
-      || die "Couldn't install on ${device_name}. Unlock it, keep it plugged in, and paste the same command again."
-    printf '%s %s\n' "${latest:-unknown}" "$(date +%s)" >"${state}"
-    if ! xcrun devicectl device process launch --device "${device_id}" "${bundle}" >/dev/null 2>&1 </dev/null; then
-      card "TypeWrite is on ${device_name:0:24}" \
-        "First time only, on the iPhone:" \
-        "Settings → General → VPN & Device" \
-        "Management → Apple Development → Trust." \
-        "Then tap TypeWrite on your home screen." \
-        "Run this line again any time to update."
-      exit 0
-    fi
-  else
-    why "Starting the Simulator and copying TypeWrite in."
-    xcrun simctl boot "${sim_udid}" >/dev/null 2>&1 </dev/null || true
-    open -a Simulator --args -CurrentDeviceUDID "${sim_udid}" >/dev/null 2>&1 || true
-    bar 20 xcrun simctl install "${sim_udid}" "${app}" || die "Couldn't install in the Simulator. The log is at ${LOG}"
-    printf '%s %s\n' "${latest:-unknown}" "$(date +%s)" >"${state}"
-    xcrun simctl launch "${sim_udid}" "${bundle}" >/dev/null 2>&1 </dev/null || true
-  fi
+  trust=0
+  for t in "${todo[@]}"; do
+    case "${t}" in
+      mac)
+        why "Putting TypeWrite in $(pretty "${apps_dir}")."
+        pkill -f "${mac_app}/Contents/MacOS/TypeWrite" >/dev/null 2>&1 || true   # an open copy is replaced, so close it first
+        [ -d "${mac_app}" ] && mv "${mac_app}" "${TMP}/TypeWrite-old.app"            # the old copy goes with the temporary folder
+        ditto "${mac_built}" "${mac_app}" || die "Couldn't copy TypeWrite into ${apps_dir}."
+        printf '%s %s\n' "${latest:-unknown}" "$(date +%s)" >"${STATE_DIR}/mac"
+        ok "TypeWrite is in $(pretty "${apps_dir}")." ;;
+      iphone)
+        why "Copying TypeWrite to ${device_name} over the cable. Keep it unlocked."
+        bar 25 xcrun devicectl device install app --device "${device_id}" "${iphone_built}" \
+          || die "Couldn't install on ${device_name}. Unlock it, keep it plugged in, and paste the same command again."
+        printf '%s %s\n' "${latest:-unknown}" "$(date +%s)" >"${STATE_DIR}/iphone-${device_udid}"
+        ok "TypeWrite is on ${device_name}." ;;
+      simulator)
+        why "Starting the Simulator and copying TypeWrite in."
+        xcrun simctl boot "${sim_udid}" >/dev/null 2>&1 </dev/null || true
+        open -a Simulator --args -CurrentDeviceUDID "${sim_udid}" >/dev/null 2>&1 || true
+        bar 20 xcrun simctl install "${sim_udid}" "${sim_built}" || die "Couldn't install in the Simulator. The log is at ${LOG}"
+        printf '%s %s\n' "${latest:-unknown}" "$(date +%s)" >"${STATE_DIR}/simulator-${sim_udid}"
+        ok "TypeWrite is in the Simulator." ;;
+    esac
+  done
+  for t in "${targets[@]}"; do
+    if ! launch "${t}" && [ "${t}" = "iphone" ]; then trust=1; fi
+  done
 
-  if [ -n "${installed}" ]; then
-    card "TypeWrite is updated" "Your sheets are kept." "Run this line again any time to update."
+  where="$(places "${targets[@]}")"
+  if [ "${trust}" = 1 ]; then
+    card "TypeWrite is installed" \
+      "On the iPhone, the first time only:" \
+      "Settings → General → VPN & Device" \
+      "Management → Apple Development → Trust." \
+      "Then tap TypeWrite on your home screen." \
+      "Run this line again any time to update."
+  elif [ "${updating}" = 1 ]; then
+    card "TypeWrite is updated" "${where}" "Your sheets are kept." "Run this line again any time to update."
   else
-    card "TypeWrite is ready" "Feed a sheet and start typing." "Run this line again any time to update."
+    card "TypeWrite is ready" "${where}" "Feed a sheet and start typing." "Run this line again any time to update."
   fi
 }
 

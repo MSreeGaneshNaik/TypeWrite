@@ -222,10 +222,10 @@
   <button class="hud-btn hud-side" id="sheetsKey" type="button" aria-label="Your sheets" title="Your sheets" aria-haspopup="dialog" aria-controls="sheetsPanel" aria-expanded="false">
     <svg class="i" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
   </button>
-  <div class="hud-right hud-side">
-    <span class="count" id="count" title="Characters on this sheet"></span>
-    <button class="done" id="doneKey" type="button" title="Stop typing (Esc)" hidden>Done</button>
-    <button class="hud-btn" id="saveKey" type="button" aria-label="Download this sheet" title="Download (Ctrl+S)" aria-haspopup="dialog" aria-controls="savePanel" aria-expanded="false">
+  <div class="hud-right">
+    <span class="count hud-side" id="count" title="Characters on this sheet"></span>
+    <button class="done hud-side" id="doneKey" type="button" title="Stop typing (Esc)" hidden>Done</button>
+    <button class="hud-btn hud-side" id="saveKey" type="button" aria-label="Download this sheet" title="Download (Ctrl+S)" aria-haspopup="dialog" aria-controls="savePanel" aria-expanded="false">
       <svg class="i" viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A1.5 1.5 0 0 0 5 12.5v7A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5H16"/></svg>
     </button>
   </div>
@@ -286,7 +286,7 @@
     </div>
     <button class="row-btn" id="phoneRow" type="button" aria-haspopup="dialog" aria-controls="phonePanel">
       <svg class="i" viewBox="0 0 24 24"><rect x="7" y="2.75" width="10" height="18.5" rx="2.5"/><path d="M11 18h2"/></svg>
-      <span>TypeWrite for iPhone<small>The native app, with real haptics</small></span>
+      <span>TypeWrite for Mac and iPhone<small>The native app, installed with one line</small></span>
       <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
     </button>
   </div>
@@ -298,7 +298,7 @@
     <div class="options">
       <button class="option primary" id="savePng" type="button">
         <svg class="i" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
-        <b>Picture of the sheet</b><small>PNG, the whole page at three times size</small>
+        <b>Picture of the sheet</b><small>PNG of the whole page, up to three times size</small>
       </button>
       <button class="option" id="saveTxt" type="button">
         <svg class="i" viewBox="0 0 24 24"><path d="M5 6h14M5 10h14M5 14h10M5 18h7"/></svg>
@@ -332,13 +332,13 @@
 </section>
 
 <section class="panel wide" id="phonePanel" role="dialog" aria-labelledby="phoneTitle" tabindex="-1" hidden>
-  <div class="drag"><div class="grabber"></div><header><h2 id="phoneTitle">TypeWrite for iPhone</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
+  <div class="drag"><div class="grabber"></div><header><h2 id="phoneTitle">TypeWrite for Mac and iPhone</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
   <div class="panel-body">
-    <p class="lede">The same machine as a native iPhone app, with real haptics. Paste this into Terminal on a Mac:</p>
+    <p class="lede">The same machine as a native app for your Mac, and for your iPhone with real haptics. Paste this into Terminal on a Mac:</p>
     <div class="cmd"><code id="cmdText">curl -fsSL https://raw.githubusercontent.com/MSreeGaneshNaik/TypeWrite/main/install.sh | bash</code><button class="btn" id="copyCmd" type="button">Copy</button></div>
     <ol class="steps">
-      <li>It builds TypeWrite with Xcode, which is free in the Mac App Store.</li>
-      <li>Plug in your iPhone to install it there, signed with your own Apple ID. Without a phone, it opens in the iPhone Simulator.</li>
+      <li>It builds TypeWrite with Xcode, which is free in the Mac App Store, and puts it in your Applications folder.</li>
+      <li>Plug in your iPhone first to install it there too, signed with your own Apple ID (a free one works).</li>
       <li>Paste the same line again any time. It updates when there's something new.</li>
     </ol>
     <p class="note">Source and the full guide: <a href="https://github.com/MSreeGaneshNaik/TypeWrite">github.com/MSreeGaneshNaik/TypeWrite</a></p>
@@ -491,7 +491,20 @@ function newSheet() {
   return { id: "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: "", created: Date.now(), updated: Date.now(),
            paper: d.paper || "cream", ink: d.ink || "black", face: d.face || "courier", flower: d.flower || "none", seed: newSeed() };
 }
-let sheets = store.get("tw.sheets", []).filter(s => s && typeof s.text === "string");
+function readSheets() {
+  const v = store.get("tw.sheets", []);
+  return Array.isArray(v) ? v.filter(s => s && typeof s.text === "string" && s.id) : [];
+}
+// Another tab may have saved sheets this one has never seen: keep the newest copy of each.
+function mergeSheets(...lists) {
+  const byIdMap = new Map();
+  for (const list of lists) for (const s of list) {
+    const prev = byIdMap.get(s.id);
+    if (!prev || (s.updated || 0) >= (prev.updated || 0)) byIdMap.set(s.id, s);
+  }
+  return [...byIdMap.values()].sort((a, b) => (b.updated || 0) - (a.updated || 0));
+}
+let sheets = readSheets();
 let sheet = sheets.find(s => s.id === store.get("tw.current", "")) || null;
 let fresh = false;
 if (!sheet) { sheet = newSheet(); fresh = true; }
@@ -500,9 +513,8 @@ let saveTimer = 0;
 function persist(now) {
   clearTimeout(saveTimer);
   const write = () => {
-    const blank = !sheet.text.trim();
-    sheets = sheets.filter(s => s.id !== sheet.id && s.text.trim());
-    if (!blank) sheets.unshift(sheet);
+    sheets = mergeSheets(readSheets(), sheets).filter(s => s.id !== sheet.id && s.text.trim());
+    if (sheet.text.trim()) sheets.unshift(sheet);
     store.set("tw.sheets", sheets); store.set("tw.current", sheet.id);
   };
   if (now) write(); else saveTimer = setTimeout(write, 400);
@@ -798,7 +810,11 @@ const $ = sel => document.querySelector(sel);
 const stage = $("#stage"), keys = $("#keys"), hud = $("#hud"), ghost = $("#ghost");
 const hudSides = [...document.querySelectorAll(".hud-side")];
 // The first-line prompt is part of the page: tapping it starts the machine like tapping the paper.
-ghost.addEventListener("pointerdown", e => { e.preventDefault(); if (!panelOpen()) setTyping(true); });
+ghost.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  if (swallowTap) { swallowTap = false; return; }
+  if (!panelOpen()) setTyping(true);
+});
 const forgetHudBoxes = () => hudSides.forEach(el => { el.box = null; });
 const motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
 let reduceMotion = motionQuery.matches;
@@ -864,7 +880,7 @@ function frame(t) {
     const r = reduceMotion ? 0.06 : s.resp, d = reduceMotion ? 1 : s.damp;
     for (let i = 0; i < steps; i++) stepSpring(s, h, r, d);
   }
-  draw();
+  try { draw(); } catch (err) { running = false; throw err; }
   const settled = !coast && Object.values(spring).every(s => Math.abs(s.v - s.to) < 0.01 && Math.abs(s.vel) < 0.01);
   if (settled) { for (const k in spring) { spring[k].v = spring[k].to; spring[k].vel = 0; } draw(); running = false; }
   else requestAnimationFrame(frame);
@@ -876,6 +892,7 @@ function resize() {
   forgetHudBoxes(); retarget(true); kick();
 }
 function draw() {
+  if (!GL && !ctx2d) return;                                // still starting up
   if (GL) GL.render(); else draw2D();
   const topY = topMargin(sheet) + spring.y.v, paperTop = toScreen(0, topY)[1] + 6;
   const left = toScreen(-PAPER_W / 2, 0)[0], right = toScreen(PAPER_W / 2, 0)[0];
@@ -1112,7 +1129,7 @@ async function initGL() {
   scene.add(ambient, key, lampLight);
 
   // Ink lives in a tall texture covering the part of the sheet near the screen; typing patches a band.
-  const INK = { canvas: null, g: null, tex: null, S: 1, top: -1e9, h: 0, band: null, bandG: null, bandTex: null, sig: "" };
+  const INK = { canvas: null, g: null, tex: null, S: 1, top: -1e9, h: 0, band: null, bandG: null, bandTex: null, sig: "", dirty: true };
   function setupInk() {
     const maxTex = Math.min(renderer.capabilities.maxTextureSize, 4096);
     const S = Math.max(1.8, Math.min(3.4, zoom * DPR * 0.62));
@@ -1128,21 +1145,21 @@ async function initGL() {
     INK.bandTex = new THREE.CanvasTexture(INK.band); INK.bandTex.flipY = false;
     uniforms.uInk.value = INK.tex; uniforms.uInkH.value = INK.h;
   }
-  function inkSig() { return [sheet.id, sheet.face, typist.chars.length, typist.layout.lines.length].join("|"); }
+  function inkSig() { return [sheet.id, sheet.face, topMargin(sheet), typist.chars.length, typist.layout.lines.length].join("|"); }
   function redrawInk(centre) {
     INK.top = Math.floor(centre - INK.h / 2);
     const g = INK.g;
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, INK.canvas.width, INK.canvas.height);
     g.setTransform(INK.S, 0, 0, INK.S, 0, -INK.top * INK.S);
     drawInk(g, sheet, typist.layout, INK.top, INK.h);
-    INK.tex.needsUpdate = true; INK.sig = inkSig();
+    INK.tex.needsUpdate = true; INK.sig = inkSig(); INK.dirty = false;
     uniforms.uInkTop.value = INK.top;
   }
   // Re-ink only the lines a keystroke touched, and copy that band into the texture.
   function patchInk(fromLine, toLine) {
     const tm = topMargin(sheet);
     const bandTop = tm + fromLine * LH - 20, bandBottom = tm + toLine * LH + 8;
-    if (INK.top === -1e9 || bandTop < INK.top || bandBottom > INK.top + INK.h || toLine - fromLine > 8) return false;
+    if (INK.dirty || INK.top === -1e9 || INK.sig === "" || bandTop < INK.top || bandBottom > INK.top + INK.h || toLine - fromLine > 8) { INK.dirty = true; return false; }
     const y0 = Math.max(0, Math.floor((bandTop - INK.top) * INK.S)), y1 = Math.min(INK.canvas.height, Math.ceil((bandBottom - INK.top) * INK.S));
     if (y1 - y0 < 2) return true;
     const top = INK.top + y0 / INK.S, h = (y1 - y0) / INK.S;
@@ -1208,7 +1225,7 @@ async function initGL() {
     const paperH = Math.max(sheetHeight(sheet, typist.layout), viewBottom + 160);
     uniforms.uPaperH.value = paperH; uniforms.uTopY.value = topY;
     uniforms.uWinTop.value = viewTop - 90; uniforms.uWinH.value = (viewBottom - viewTop) + 180;
-    if (INK.sig !== inkSig() || viewTop - 30 < INK.top || viewBottom + 30 > INK.top + INK.h) redrawInk((viewTop + viewBottom) / 2);
+    if (INK.dirty || INK.sig !== inkSig() || viewTop - 30 < INK.top || viewBottom + 30 > INK.top + INK.h) redrawInk((viewTop + viewBottom) / 2);
     uniforms.uPxPerPt.value = zoom * DPR; uniforms.uView.value.set(W * DPR, H * DPR);
     const cx = spring.x.v - PAPER_W / 2, camY = camera.position.y;
     uniforms.uCaretX.value = cx;
@@ -1274,7 +1291,7 @@ async function initGL() {
     }
     return out;
   }
-  return { renderer, render: renderGL, resize: resizeGL, patchInk, redrawAll: () => { INK.sig = ""; }, exportPng: exportGL };
+  return { renderer, render: renderGL, resize: resizeGL, patchInk, redrawAll: () => { INK.dirty = true; }, exportPng: exportGL };
 }
 
 // ---------- Without WebGL: the same layout, drawn flat in 2D ----------
@@ -1325,6 +1342,7 @@ function after(events, beforeLine) {
 }
 // The hidden field always holds two spaces, so Backspace has something to delete on phone keyboards.
 const SENTINEL = "  ";
+const BACKSPACES = new Set(["deleteContentBackward", "deleteWordBackward", "deleteSoftLineBackward", "deleteHardLineBackward", "deleteContentForward"]);
 function resetKeys() { keys.value = SENTINEL; keys.setSelectionRange(SENTINEL.length, SENTINEL.length); }
 let composing = false;
 keys.addEventListener("compositionstart", () => { composing = true; });
@@ -1335,7 +1353,8 @@ keys.addEventListener("beforeinput", e => {
   if (t === "insertText" || t === "insertReplacementText") { e.preventDefault(); strike(e.data || (e.dataTransfer && e.dataTransfer.getData("text/plain")) || ""); }
   else if (t === "insertLineBreak" || t === "insertParagraph") { e.preventDefault(); strike("\n"); }
   else if (t === "insertFromPaste" || t === "insertFromDrop") { e.preventDefault(); strike((e.dataTransfer && e.dataTransfer.getData("text/plain")) || e.data || ""); }
-  else if (t && t.startsWith("delete")) { e.preventDefault(); takeBack(); }
+  else if (BACKSPACES.has(t)) { e.preventDefault(); takeBack(); }
+  else if (t && t.startsWith("delete")) e.preventDefault();
 });
 keys.addEventListener("input", () => {
   if (composing) return;
@@ -1352,6 +1371,7 @@ keys.addEventListener("keydown", e => {
   if (e.key === "Escape") { e.preventDefault(); setTyping(false); }
   else if (e.key === "Tab") { e.preventDefault(); strike("\t"); }
   else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); setTyping(false); openPanel("savePanel", $("#saveKey")); }
+  else if (e.altKey && e.code === "KeyN") { e.preventDefault(); feedNew(); }
 });
 keys.addEventListener("blur", () => { if (typing && !panelOpen()) setTyping(false); });
 
@@ -1384,14 +1404,14 @@ function velocityOf(list, now) {
   return dt > 0 ? (b.y - a.y) / dt : 0;
 }
 stage.addEventListener("pointerdown", e => {
+  const swallowed = swallowTap; swallowTap = false;
   if (e.button !== 0) return;
   if (e.pointerType === "mouse") e.preventDefault();
   const moving = coast || Math.abs(spring.y.vel) > 40;
   coast = null;
   const start = typist.layout.line * LH - spring.y.v;      // catch the page where it is right now
   if (moving) { review = start; spring.y.to = spring.y.v; spring.y.vel = 0; }
-  drag = { id: e.pointerId, y: e.clientY, start, moved: false, caught: moving || swallowTap, wasTyping: typing, samples: [{ t: e.timeStamp, y: e.clientY }] };
-  swallowTap = false;
+  drag = { id: e.pointerId, y: e.clientY, start, moved: false, caught: moving || swallowed, wasTyping: typing, samples: [{ t: e.timeStamp, y: e.clientY }] };
   stage.setPointerCapture(e.pointerId);
 });
 stage.addEventListener("pointermove", e => {
@@ -1408,7 +1428,12 @@ stage.addEventListener("pointermove", e => {
 function endDrag(e) {
   if (!drag || e.pointerId !== drag.id) return;
   const d = drag; drag = null;
-  if (!d.moved) { if (!d.caught) setTyping(!d.wasTyping); return; }
+  if (!d.moved) {
+    const lim = reviewLimit();
+    if (review < 0 || review > lim) { review = clamp(review, 0, lim); setFeel(["y"], 0.42, 1); retarget(); kick(); }
+    if (!d.caught) setTyping(!d.wasTyping);
+    return;
+  }
   const v = velocityOf(d.samples, e.timeStamp) / zoom, lim = reviewLimit();
   if (review < 0 || review > lim) {
     review = Math.min(Math.max(review, 0), lim);
@@ -1431,8 +1456,12 @@ function scrollBy(points) {
   setFeel(["y"], 0.38, 1); retarget(); kick();
 }
 document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    if (!typing && !(current && current.id === "savePanel")) openPanel("savePanel", $("#saveKey"));
+    return;
+  }
   if (typing || panelOpen()) return;
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); openPanel("savePanel", $("#saveKey")); return; }
   if (e.altKey && e.code === "KeyN") { e.preventDefault(); feedNew(); return; }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const onControl = e.target.closest && e.target.closest("button, a, input, [role=radio]");
@@ -1505,7 +1534,7 @@ function openPanel(id, opener) {
 }
 function closePanel(quick) {
   const st = current; if (!st) return;
-  current = null; st.to = 0; setExpanded(st, false);
+  current = null; st.to = 0; st.dragging = null; setExpanded(st, false);
   scrim.classList.remove("on"); setInert(false);
   if (!quick && st.opener && document.contains(st.opener)) st.opener.focus({ preventScroll: true });
   runPanel(st);
@@ -1583,6 +1612,7 @@ function bindSheetDrag(st) {
     const d = st.dragging; if (!d) return; st.dragging = null;
     const v = velocityOf(d.samples, e.timeStamp), off = (1 - st.v) * st.h;
     st.vel = -v / st.h;                                    // the finger's speed carries on into the spring
+    if (current !== st) { st.to = 0; runPanel(st); return; }
     if (off + project(v) > st.h * 0.5 && v > -100) closePanel(); else { st.to = 1; runPanel(st); }
   };
   zone.addEventListener("pointerup", end); zone.addEventListener("pointercancel", end);
@@ -1594,7 +1624,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && panelOpen(
 document.addEventListener("pointerdown", e => {
   if (!current || current.phone) return;
   if (current.el.contains(e.target) || e.target.closest(`[aria-controls="${current.id}"]`)) return;
-  if (stage.contains(e.target)) swallowTap = true;
+  if (stage.contains(e.target) || ghost.contains(e.target)) swallowTap = true;
   closePanel(true);
 }, true);
 
@@ -1778,9 +1808,19 @@ function setLamp(on) {
 lampKey.addEventListener("click", () => { unlockAudio(); play("backspace"); setLamp(!lampOn); });
 soundKey.setAttribute("aria-pressed", String(soundOn)); soundToggle.checked = soundOn; buzzToggle.checked = buzzOn;
 lampKey.setAttribute("aria-pressed", String(lampOn)); document.body.classList.toggle("lamp", lampOn);
-window.addEventListener("resize", () => { resize(); if (current) placePanel(current); });
+window.addEventListener("resize", () => {
+  resize();
+  if (!current) return;
+  if (isPhone() !== current.phone) { const { id, opener } = current; closePanel(true); openPanel(id, opener); }
+  else placePanel(current);
+});
 if (window.visualViewport) visualViewport.addEventListener("resize", () => { retarget(); if (typing) keys.style.top = Math.round(spring.sy.to) + "px"; kick(); });
 document.addEventListener("visibilitychange", () => { if (document.hidden) persist(true); });
+window.addEventListener("storage", e => {
+  if (e.key !== "tw.sheets") return;
+  sheets = mergeSheets(readSheets(), sheets).filter(s => s.id !== sheet.id);
+  if (current && current.id === "sheetsPanel") renderSheets();
+});
 window.addEventListener("pagehide", () => persist(true));
 
 // Start once the typefaces are in, so the first letters land in the right face.
