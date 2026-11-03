@@ -1155,10 +1155,6 @@ async function initGL() {
   const pill = new THREE.Mesh(new THREE.CapsuleGeometry(PILL_R, PILL_LEN - PILL_R * 2, 16, 48), pillMat);
   pill.rotation.z = Math.PI / 2; pill.scale.set(1, 1, 0.82); pill.position.set(0, 0, 4); guide.add(pill);
   const front = 4 + PILL_R * 0.82;                                   // the capsule's front face
-  // A dark glass bezel centred on the front, holding the lamps.
-  const bezelMat = new THREE.MeshPhysicalMaterial({ color: 0x151413, roughness: 0.18, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.08 });
-  const bezel = new THREE.Mesh(new THREE.CapsuleGeometry(5.2, 26, 10, 32), bezelMat);
-  bezel.rotation.z = Math.PI / 2; bezel.scale.set(1, 1, 0.32); bezel.position.set(0, 0, front - 0.4); guide.add(bezel);
   // Three radium lamps: green strikes a key, amber the space bar, red takes a letter back.
   const LAMP_COLOURS = [0x3dff7a, 0xffc23d, 0xff4438];
   const lampGeo = new THREE.SphereGeometry(3.1, 24, 16);
@@ -1173,7 +1169,7 @@ async function initGL() {
     const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(hex).multiplyScalar(0.32), emissive: hex, emissiveIntensity: 0.2, roughness: 0.22 });
     const bulb = new THREE.Mesh(lampGeo, mat);
     bulb.position.set((i - 1) * 10.5, 0, front + 0.6); bulb.scale.set(1, 1, 0.55); guide.add(bulb);
-    const haloMat = new THREE.MeshBasicMaterial({ map: glowTex, color: hex, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending });
+    const haloMat = new THREE.MeshBasicMaterial({ map: glowTex, color: hex, transparent: true, opacity: 0, depthWrite: false, depthTest: false });   // normal blend: additive washes out to white on the cream
     const halo = new THREE.Mesh(haloGeo, haloMat);
     halo.position.set((i - 1) * 10.5, 0, front + 3.4); halo.renderOrder = 20; guide.add(halo);
     return { mat, halo };
@@ -1314,8 +1310,8 @@ async function initGL() {
     // The lamps glow faintly like radium paint, and flare when their key is struck.
     lamps.forEach((l, i) => {
       const g = lampGlow[i];
-      l.mat.emissiveIntensity = 0.2 + 1.9 * g;
-      l.halo.material.opacity = 0.16 + 0.84 * g;
+      l.mat.emissiveIntensity = 0.25 + 0.9 * g;
+      l.halo.material.opacity = 0.8 * g;
       const sz = 10 + 22 * g; l.halo.scale.set(sz, sz, 1);
     });
     const lamp = spring.lamp.v;
@@ -1324,8 +1320,7 @@ async function initGL() {
     ambient.intensity = 1.1 * (1 - lamp * 0.85); key.intensity = 2.2 * (1 - lamp * 0.9);
     lampLight.position.set(cx * kGuide, camY + (-6 - camY) * kGuide, 40); lampLight.intensity = 2.6 * lamp;
     steel.envMapIntensity = 1 - lamp * 0.75; black.envMapIntensity = 1 - lamp * 0.75; pillMat.envMapIntensity = 0.6 * (1 - lamp * 0.7);
-    rubber.envMapIntensity = 0.22 * (1 - lamp * 0.8); bezelMat.envMapIntensity = 1 - lamp * 0.6;
-    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
+    rubber.envMapIntensity = 0.22 * (1 - lamp * 0.8);    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
     renderer.setClearColor(0x161514, 1);
     renderer.render(scene, camera);
   }
@@ -1394,7 +1389,6 @@ function draw2D() {
   g.fillStyle = "#9a9da3"; g.fillRect(0, ry - ROD_R * z, W, 2 * z);
   g.fillStyle = "#141414"; g.fillRect(0, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z); g.fillRect(W - 14 * z, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z);
   g.fillStyle = "#F1EDE4"; g.beginPath(); g.roundRect(cx - PILL_LEN / 2 * z, ry - PILL_R * z, PILL_LEN * z, PILL_R * 2 * z, PILL_R * z); g.fill();
-  g.fillStyle = "#151413"; g.beginPath(); g.roundRect(cx - 18.4 * z, ry - 5.2 * z, 36.8 * z, 10.4 * z, 5.2 * z); g.fill();
   ["#3dff7a", "#ffc23d", "#ff4438"].forEach((c, i) => {
     const x = cx + (i - 1) * 10.5 * z, glow = lampGlow[i];
     g.save(); g.shadowColor = c; g.shadowBlur = (4 + 14 * glow) * z; g.globalAlpha = 0.65 + 0.35 * glow;

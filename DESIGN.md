@@ -146,7 +146,7 @@ The desk is a neutral near-black. The chrome is a near-neutral light grey that n
 ## Layout
 
 - **Page:** 358 × 463 pt (US letter proportions), 30 columns, side margin 26 pt, top margin 70 pt (138 pt with a pressed flower). On screen the paper always runs past the bottom of the window. The download keeps the page size.
-- **Strike line:** placed from the bottom of the visual viewport so the guide clears the dock (`strikeLine()`: the guide's depth plus 104 px above the bottom, held between 50% and 76% of the height). It moves above a phone keyboard. Rod centre 42 pt below the baseline. Guide capsule 82 × 27 pt with a dark glass bezel holding the three lamps 10.5 pt apart. The T pointer sits 7 pt under the baseline.
+- **Strike line:** placed from the bottom of the visual viewport so the guide clears the dock (`strikeLine()`: the guide's depth plus 104 px above the bottom, held between 50% and 76% of the height). It moves above a phone keyboard. Rod centre 42 pt below the baseline. Guide capsule 82 × 27 pt with the three lamps set straight into its face, 10.5 pt apart. The T pointer sits 7 pt under the baseline.
 - **HUD:** 60 px high, 10 px side inset, 44 px targets. Each side picks its colour from what is behind it (page or desk).
 - **Dock:** centred, 18 px above the safe area. It slides away while typing.
 - **Panels:** popovers anchored to their button on screens 720 px and wider; full-width bottom sheets with a grabber below that.
