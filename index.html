@@ -1,0 +1,1796 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
+<title>TypeWrite by Jericho</title>
+<meta name="description" content="A typewriter in your browser. Every key clacks, the bell rings near the margin, and the ink sits in old paper like the real thing. Download your sheet when you're done.">
+<meta name="theme-color" content="#161514">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="TypeWrite by Jericho">
+<meta property="og:description" content="A typewriter in your browser and on your iPhone. Every key clacks.">
+<meta property="og:image" content="Branding/AppIcon-1024.png">
+<link rel="icon" href="Branding/AppIcon-1024.png">
+<link rel="apple-touch-icon" href="Branding/AppIcon-1024.png">
+<link rel="preload" href="TypeWrite/Resources/Fonts/CourierPrime-Regular.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="modulepreload" href="vendor/three/three.module.min.js">
+<style>
+  /* Typewriter faces: for the page and the wordmark only. The controls use the system face. */
+  @font-face { font-family: "Courier Prime"; src: url("TypeWrite/Resources/Fonts/CourierPrime-Regular.ttf") format("truetype"); font-display: block; }
+  @font-face { font-family: "Special Elite"; src: url("TypeWrite/Resources/Fonts/SpecialElite-Regular.ttf") format("truetype"); font-display: block; }
+
+  :root {
+    --desk: #161514;
+    /* Chrome that floats over the page: near-neutral light surfaces and dark words. */
+    --surface: #F2F1EE; --raised: #E6E4DF; --rule: #DAD7D0; --control: #C9C5BC;
+    --text: #23211E; --muted: #55504A; --faint: #6A645B;
+    --primary: #23211E; --primary-hover: #3A3733; --on-primary: #F2F1EE; --on-primary-muted: #C9C5BC;
+    --hud-on-paper: #3A3733; --hud-on-desk: #D6D2C9;
+    --gold: #A06A1C; --alarm: #B23A2C;
+    --ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --brand: "Special Elite", var(--ui);
+    --r-panel: 18px; --r-tile: 10px;
+    --ease-out: cubic-bezier(.2, .9, .25, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--desk); color: var(--hud-on-desk); font: 14px/20px var(--ui); overflow: hidden; overscroll-behavior: none;
+               -webkit-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  button { -webkit-tap-highlight-color: transparent; }
+  ::selection { background: rgba(160, 106, 28, .26); color: var(--text); }
+  :focus { outline: none; }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  a { color: var(--text); text-decoration-color: var(--control); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-color: var(--text); }
+  svg.i { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+  /* ---------- The machine fills the window ---------- */
+  #stage { position: fixed; inset: 0; touch-action: none; cursor: text; }
+  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  textarea#keys { position: fixed; left: 50%; top: 50%; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; resize: none; font-size: 16px;
+                  caret-color: transparent; color: transparent; background: transparent; z-index: 1; }
+
+  /* Faint first-line prompt, set on the page itself */
+  .ghost { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+  .ghost[hidden] { display: none; }
+  .ghost p { position: absolute; margin: 0; white-space: nowrap; pointer-events: auto; cursor: text; }
+  .ghost p[hidden] { display: none; }
+  #ghostAsk { font-family: var(--mono); color: #5F5B53; transform: translate(-50%, -100%); letter-spacing: .01em; }
+  #ghostStart { font-family: "Courier Prime", var(--mono); color: #67635B; line-height: 1; transform: translateY(-82%); }
+  body.lamp #ghostAsk { color: #8F887C; }
+
+  /* ---------- Over the page: back to your sheets, the count, share ---------- */
+  .hud { position: fixed; inset: 0 0 auto 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+         height: calc(60px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+         pointer-events: none; }
+  .hud-side { color: var(--hud-on-paper); transition: color .35s; }
+  .hud-side.on-desk { color: var(--hud-on-desk); }
+  .hud > * { pointer-events: auto; }
+  .hud-right { display: flex; align-items: center; gap: 2px; }
+  .hud-btn { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 999px; background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer;
+             transition: background-color .15s, transform .14s var(--ease-out); }
+  .hud-btn:hover { background: rgba(35, 33, 30, .07); }
+  .on-desk .hud-btn:hover, .hud-btn.on-desk:hover { background: rgba(255, 255, 255, .09); }
+  .hud-btn:active { transform: scale(.9); }
+  .count { font: 12px/16px var(--mono); letter-spacing: .02em; font-variant-numeric: tabular-nums; padding: 0 8px; white-space: nowrap; }
+  .done { height: 32px; padding: 0 14px; border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 4px; }
+  .done[hidden] { display: none; }
+
+  /* ---------- The dock: one light pill, away while typing ---------- */
+  .dock { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; gap: 2px; padding: 6px;
+          border-radius: 999px; background: var(--surface); border: 1px solid rgba(35, 33, 30, .08); box-shadow: 0 6px 18px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .08);
+          transform: translateX(-50%); transition: transform .42s var(--ease-out), opacity .3s, visibility 0s; }
+  body.typing .dock { transform: translate(-50%, calc(100% + 40px)); opacity: 0; visibility: hidden;
+                      transition: transform .28s cubic-bezier(.4, 0, .7, .2), opacity .2s, visibility 0s .28s; }
+  .dock-btn { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 999px; background: transparent; color: var(--text); display: grid; place-items: center; cursor: pointer;
+              transition: background-color .15s, color .15s, transform .14s var(--ease-out); }
+  .dock-btn:hover, .dock-btn[aria-expanded="true"] { background: var(--raised); }
+  .dock-btn:active { transform: scale(.9); }
+  .dock-btn[aria-pressed="true"].lamp-btn { background: var(--primary); color: var(--on-primary); }
+  .dock-btn .off, .dock-btn[aria-pressed="false"] .on { display: none; }
+  .dock-btn[aria-pressed="false"] .off { display: block; }
+  .dock-rule { width: 1px; height: 24px; background: var(--rule); margin: 0 6px; flex: none; }
+  .swatch-dot { width: 20px; height: 20px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
+
+  /* ---------- Panels: popovers on a computer, sheets on a phone ---------- */
+  .scrim { position: fixed; inset: 0; z-index: 9; background: #000; opacity: 0; pointer-events: none; visibility: hidden; }
+  .scrim.on { pointer-events: auto; }
+  .panel { position: fixed; z-index: 10; display: flex; flex-direction: column; width: 340px; max-height: calc(100vh - 140px);
+           background: var(--surface); color: var(--text); border: 1px solid rgba(35, 33, 30, .08); border-radius: var(--r-panel);
+           box-shadow: 0 18px 44px rgba(0, 0, 0, .28), 0 2px 8px rgba(0, 0, 0, .12); opacity: 0; will-change: transform, opacity; }
+  .panel[hidden] { display: none; }
+  .panel.wide { width: 400px; }
+  .drag { touch-action: none; flex: none; }
+  .grabber { display: none; }
+  .panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 10px 6px 20px; }
+  .panel h2 { margin: 0; font-size: 15px; line-height: 20px; font-weight: 600; }
+  .masthead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .masthead svg { width: 30px; height: 30px; border-radius: 8px; flex: none; }
+  .masthead .wordmark { font-family: var(--brand); font-size: 21px; line-height: 24px; font-weight: 400; }
+  .masthead h2 { display: flex; align-items: baseline; gap: 8px; }
+  .masthead .by { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--faint); }
+  .text-btn { border: 0; background: none; color: var(--text); font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 999px; cursor: pointer; transition: background-color .15s; }
+  .text-btn:hover { background: var(--raised); }
+  .panel-body { overflow: auto; overscroll-behavior: contain; padding: 6px 20px 20px; scrollbar-width: thin; scrollbar-color: var(--control) transparent; }
+  .panel-body::-webkit-scrollbar { width: 10px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--control); border-radius: 10px; border: 3px solid var(--surface); }
+  .note { margin: 14px 0 0; font-size: 13px; line-height: 18px; color: var(--faint); }
+  .group { margin-top: 18px; }
+  .panel-body > .group:first-child { margin-top: 0; }
+  .label { margin: 0 0 8px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--muted); }
+
+  .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .chip { border: 0; background: none; padding: 8px 2px 6px; border-radius: var(--r-tile); display: grid; justify-items: center; gap: 8px; color: var(--muted);
+          font-size: 12px; line-height: 16px; text-align: center; cursor: pointer; transition: color .15s, background-color .15s; }
+  .chip:hover { color: var(--text); background: var(--raised); }
+  .chip .dot { width: 40px; height: 40px; border-radius: 50%; display: block; box-shadow: 0 0 0 1px rgba(35, 33, 30, .14); }
+  .chip[aria-checked="true"] { color: var(--text); font-weight: 600; }
+  .chip[aria-checked="true"] .dot { outline: 2px solid var(--text); outline-offset: 3px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tiles.two { grid-template-columns: 1fr 1fr; }
+  .tile { border: 0; padding: 0 0 8px; border-radius: var(--r-tile); background: var(--raised); display: grid; gap: 7px; color: var(--muted); font-size: 12px; line-height: 16px;
+          cursor: pointer; overflow: hidden; transition: color .15s; }
+  .tile:hover { color: var(--text); }
+  .tile canvas { width: 100%; height: auto; display: block; }
+  .tile[aria-checked="true"] { color: var(--text); font-weight: 600; outline: 2px solid var(--text); outline-offset: 2px; }
+  .tile:focus-visible, .tile[aria-checked="true"]:focus-visible { outline-color: var(--gold); }
+
+  .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; cursor: pointer; }
+  .switch-row small { display: block; font-size: 12px; line-height: 16px; color: var(--faint); }
+  .switch { appearance: none; -webkit-appearance: none; flex: none; margin: 0; width: 44px; height: 26px; border-radius: 999px; background: var(--control); position: relative; cursor: pointer;
+            transition: background-color .2s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+                   box-shadow: 0 1px 2px rgba(0, 0, 0, .2); transition: transform .32s cubic-bezier(.34, 1.4, .64, 1); }
+  .switch:checked { background: var(--primary); }
+  .switch:checked::after { transform: translateX(18px); }
+
+  .sheet-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  .sheet-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px; padding: 6px 4px 6px 6px; border-radius: var(--r-tile); transition: background-color .15s; }
+  .sheet-row:hover, .sheet-row[aria-current="true"] { background: var(--raised); }
+  .sheet-open { display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; border-radius: 6px; background: none; text-align: left; cursor: pointer; }
+  .sheet-open > span { min-width: 0; }
+  .sheet-open canvas { width: 44px; height: 57px; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(35, 33, 30, .1); }
+  .sheet-name { display: block; font-size: 14px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sheet-sub { display: block; font-size: 12px; line-height: 16px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .trash { width: 36px; height: 36px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+  .trash svg { width: 18px; height: 18px; }
+  .trash:hover { color: var(--alarm); background: rgba(178, 58, 44, .08); }
+  .row-btn { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-top: 14px; border: 1px solid var(--rule); border-radius: var(--r-tile);
+             background: transparent; color: var(--text); text-align: left; cursor: pointer; transition: background-color .15s; }
+  .row-btn:hover { background: var(--raised); }
+  .row-btn span { flex: 1; }
+  .row-btn small { display: block; font-size: 12px; line-height: 16px; color: var(--faint); }
+
+  .options { display: grid; gap: 8px; }
+  .option { display: grid; grid-template-columns: 22px 1fr; gap: 2px 12px; align-items: center; text-align: left; padding: 13px 16px; border-radius: var(--r-tile);
+            border: 1px solid var(--control); background: transparent; color: var(--text); cursor: pointer; transition: background-color .15s, transform .14s var(--ease-out); }
+  .option:hover { background: var(--raised); }
+  .option:active { transform: scale(.985); }
+  .option b { font-size: 14px; line-height: 20px; font-weight: 600; }
+  .option small { grid-column: 2; font-size: 12px; line-height: 16px; color: var(--faint); }
+  .option.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .option.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  .option.primary small { color: var(--on-primary-muted); }
+  .option:disabled { opacity: .45; cursor: default; transform: none; }
+  .option:disabled:hover { background: transparent; }
+  .option.primary:disabled:hover { background: var(--primary); }
+
+  .lede { margin: 0; color: var(--muted); }
+  .cmd { display: flex; align-items: center; gap: 8px; margin: 14px 0 16px; padding: 6px 6px 6px 14px; border-radius: var(--r-tile); background: #E9E7E2; border: 1px solid var(--rule); }
+  .cmd code { flex: 1; min-width: 0; font: 13px/20px var(--mono); color: var(--text); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .cmd code::-webkit-scrollbar { display: none; }
+  .btn { height: 32px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--primary); color: var(--on-primary); font-size: 13px; font-weight: 600; cursor: pointer; flex: none; }
+  .btn:hover { background: var(--primary-hover); }
+  .steps { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 20px; }
+  .steps li + li { margin-top: 6px; }
+
+  .toast { position: fixed; left: 50%; top: calc(66px + env(safe-area-inset-top)); z-index: 12; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px);
+           min-height: 40px; padding: 8px 18px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: 14px; line-height: 20px;
+           box-shadow: 0 10px 28px rgba(0, 0, 0, .3); transform: translate(-50%, -10px) scale(.98); opacity: 0; visibility: hidden;
+           transition: opacity .18s, transform .3s var(--ease-out), visibility 0s .3s; }
+  .toast.show { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition: opacity .18s, transform .42s cubic-bezier(.34, 1.3, .64, 1), visibility 0s; }
+  .toast.has-action { padding-right: 6px; }
+  .toast button { border: 0; border-radius: 999px; background: var(--on-primary); color: var(--primary); padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+  @media (max-width: 719px) {
+    .dock { bottom: calc(12px + env(safe-area-inset-bottom)); gap: 0; padding: 5px; }
+    .dock-btn { width: 42px; height: 42px; }
+    .dock-rule { margin: 0 3px; }
+    .panel, .panel.wide { left: 0; right: 0; bottom: 0; width: auto; max-height: 88vh; max-height: 88dvh; border-width: 1px 0 0; border-radius: var(--r-panel) var(--r-panel) 0 0;
+                          padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -10px 32px rgba(0, 0, 0, .22); }
+    /* Below the sheet, so a spring that overshoots never shows a gap. */
+    .panel::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 80px; background: var(--surface); }
+    .grabber { display: block; width: 36px; height: 5px; border-radius: 3px; background: var(--control); margin: 8px auto 0; }
+    .panel header { padding-top: 6px; }
+  }
+  @media (max-width: 359px) { .dock-btn { width: 38px; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: .01ms !important; transition-delay: 0s !important; }
+  }
+</style>
+</head>
+<body>
+<h1 class="sr">TypeWrite by Jericho</h1>
+<div id="stage" role="img" aria-label="A blank sheet in a typewriter"></div>
+<label class="sr" for="keys">Type on the sheet</label>
+<textarea id="keys" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="enter"></textarea>
+<div class="ghost" id="ghost" aria-hidden="true"><p id="ghostAsk">No first line yet?</p><p id="ghostStart">Start here.</p></div>
+
+<header class="hud" id="hud">
+  <button class="hud-btn hud-side" id="sheetsKey" type="button" aria-label="Your sheets" title="Your sheets" aria-haspopup="dialog" aria-controls="sheetsPanel" aria-expanded="false">
+    <svg class="i" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+  </button>
+  <div class="hud-right hud-side">
+    <span class="count" id="count" title="Characters on this sheet"></span>
+    <button class="done" id="doneKey" type="button" title="Stop typing (Esc)" hidden>Done</button>
+    <button class="hud-btn" id="saveKey" type="button" aria-label="Download this sheet" title="Download (Ctrl+S)" aria-haspopup="dialog" aria-controls="savePanel" aria-expanded="false">
+      <svg class="i" viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A1.5 1.5 0 0 0 5 12.5v7A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5H16"/></svg>
+    </button>
+  </div>
+</header>
+
+<nav class="dock" id="dock" aria-label="Sheet">
+  <button class="dock-btn" id="newKey" type="button" aria-label="Feed a new sheet" title="Feed a new sheet (Alt+N)">
+    <svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/></svg>
+  </button>
+  <button class="dock-btn" id="faceKey" type="button" aria-label="Typeface" title="Typeface" aria-haspopup="dialog" aria-controls="facePanel" aria-expanded="false">
+    <svg class="i" viewBox="0 0 24 24"><path d="M7 9V5.5A1.5 1.5 0 0 1 8.5 4h7A1.5 1.5 0 0 1 17 5.5V9"/><rect x="3" y="9" width="18" height="11" rx="2"/><path d="M7 13h.01M10 13h.01M14 13h.01M17 13h.01M8 16.5h8"/></svg>
+  </button>
+  <button class="dock-btn" id="flowerKey" type="button" aria-label="Pressed flower" title="Pressed flower" aria-haspopup="dialog" aria-controls="flowerPanel" aria-expanded="false">
+    <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="9" r="2"/><path d="M12 7a2.5 2.5 0 1 1 2.4-3.2A2.5 2.5 0 1 1 15.6 9a2.5 2.5 0 1 1-1.4 3.9A2.5 2.5 0 1 1 9.8 12.9 2.5 2.5 0 1 1 8.4 9a2.5 2.5 0 1 1 1.2-5.2A2.5 2.5 0 0 1 12 7"/><path d="M12 13v8M12 18c-2.5 0-4-1.5-4.5-3.5 2 0 3.5.8 4.5 2.4"/></svg>
+  </button>
+  <button class="dock-btn" id="paperKey" type="button" aria-label="Paper" title="Paper" aria-haspopup="dialog" aria-controls="paperPanel" aria-expanded="false">
+    <svg class="i" viewBox="0 0 24 24"><path d="M8 7V5a2 2 0 0 1 2-2h7l3 3v11a2 2 0 0 1-2 2h-2"/><path d="M6 7h6l4 4v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/></svg>
+  </button>
+  <button class="dock-btn" id="inkKey" type="button" aria-label="Ribbon" title="Ribbon" aria-haspopup="dialog" aria-controls="inkPanel" aria-expanded="false">
+    <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.2"/><path d="M12 5.8v.01M17.4 9v.01M17.4 15v.01M12 18.2v.01M6.6 15v.01M6.6 9v.01"/></svg>
+  </button>
+  <span class="dock-rule" aria-hidden="true"></span>
+  <button class="dock-btn lamp-btn" id="lampKey" type="button" aria-pressed="false" aria-label="Desk lamp" title="Desk lamp">
+    <svg class="i" viewBox="0 0 24 24"><path d="M9 4.5 14.5 3l2 5.5-6.5 2z"/><path d="M12.7 9.6 9 15l3 6M7 21h9"/><path d="M15.5 8.5 19 11"/></svg>
+  </button>
+  <button class="dock-btn" id="soundKey" type="button" aria-pressed="true" aria-label="Key sounds" title="Key sounds">
+    <svg class="i on" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+    <svg class="i off" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>
+  </button>
+</nav>
+
+<div class="scrim" id="scrim"></div>
+
+<section class="panel wide" id="sheetsPanel" role="dialog" aria-labelledby="sheetsTitle" tabindex="-1" hidden>
+  <div class="drag"><div class="grabber"></div><header>
+    <div class="masthead">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs><radialGradient id="pp" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="#F7EFDD"/><stop offset=".6" stop-color="#EFE3C8"/><stop offset="1" stop-color="#D8C49E"/></radialGradient>
+        <linearGradient id="pk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2B2723"/><stop offset="1" stop-color="#0D0B09"/></linearGradient></defs>
+        <rect width="64" height="64" rx="14" fill="url(#pp)"/>
+        <g transform="translate(12 12) scale(.0892857)" fill="url(#pk)">
+          <path d="M0 0A112 112 0 0 1 112 112L112 224A112 112 0 0 1 0 112ZM112 0A112 112 0 0 1 224 112A112 112 0 0 1 336 0L336 112A112 112 0 0 1 224 224A112 112 0 0 1 112 112ZM448 0A112 112 0 0 0 336 112L336 224A112 112 0 0 0 448 112Z"/>
+          <path d="M0 448A112 112 0 0 0 112 336L112 224A112 112 0 0 0 0 336ZM112 448A112 112 0 0 0 224 336A112 112 0 0 0 336 448L336 336A112 112 0 0 0 224 224A112 112 0 0 0 112 336ZM448 448A112 112 0 0 1 336 336L336 224A112 112 0 0 1 448 336Z"/>
+        </g>
+      </svg>
+      <h2 id="sheetsTitle"><span class="wordmark">TypeWrite</span><span class="by">by Jericho</span></h2>
+    </div>
+    <button class="text-btn" type="button" data-close>Done</button>
+  </header></div>
+  <div class="panel-body">
+    <p class="label">Your sheets</p>
+    <ul class="sheet-list" id="sheetList"></ul>
+    <p class="note">Sheets are kept in this browser only. Download any you want to keep.</p>
+    <div class="group">
+      <p class="label">Machine</p>
+      <label class="switch-row"><span>Key sounds</span><input class="switch" type="checkbox" role="switch" id="soundToggle" checked></label>
+      <label class="switch-row"><span>Key taps<small>On phones that can vibrate</small></span><input class="switch" type="checkbox" role="switch" id="buzzToggle" checked></label>
+    </div>
+    <button class="row-btn" id="phoneRow" type="button" aria-haspopup="dialog" aria-controls="phonePanel">
+      <svg class="i" viewBox="0 0 24 24"><rect x="7" y="2.75" width="10" height="18.5" rx="2.5"/><path d="M11 18h2"/></svg>
+      <span>TypeWrite for iPhone<small>The native app, with real haptics</small></span>
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+  </div>
+</section>
+
+<section class="panel" id="savePanel" role="dialog" aria-labelledby="saveTitle" tabindex="-1" hidden>
+  <div class="drag"><div class="grabber"></div><header><h2 id="saveTitle">Download</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
+  <div class="panel-body">
+    <div class="options">
+      <button class="option primary" id="savePng" type="button">
+        <svg class="i" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+        <b>Picture of the sheet</b><small>PNG, the whole page at three times size</small>
+      </button>
+      <button class="option" id="saveTxt" type="button">
+        <svg class="i" viewBox="0 0 24 24"><path d="M5 6h14M5 10h14M5 14h10M5 18h7"/></svg>
+        <b>Just the words</b><small>Plain text with your own line breaks</small>
+      </button>
+    </div>
+    <p class="note" id="saveNote"></p>
+  </div>
+</section>
+
+<section class="panel" id="paperPanel" role="dialog" aria-labelledby="paperTitle" tabindex="-1" hidden>
+  <div class="drag"><div class="grabber"></div><header><h2 id="paperTitle">Paper</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
+  <div class="panel-body"><div class="chips" id="paperChips" role="radiogroup" aria-labelledby="paperTitle"></div>
+    <p class="note">Every sheet ages in its own way: its own specks, fibres and foxing.</p></div>
+</section>
+
+<section class="panel" id="inkPanel" role="dialog" aria-labelledby="inkTitle" tabindex="-1" hidden>
+  <div class="drag"><div class="grabber"></div><header><h2 id="inkTitle">Ribbon</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
+  <div class="panel-body"><div class="chips" id="inkChips" role="radiogroup" aria-labelledby="inkTitle"></div>
+    <p class="note">A cloth ribbon: the weave shows in every letter.</p></div>
+</section>
+
+<section class="panel" id="facePanel" role="dialog" aria-labelledby="faceTitle" tabindex="-1" hidden>
+  <div class="drag"><div class="grabber"></div><header><h2 id="faceTitle">Typeface</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
+  <div class="panel-body"><div class="tiles two" id="faceTiles" role="radiogroup" aria-labelledby="faceTitle"></div></div>
+</section>
+
+<section class="panel" id="flowerPanel" role="dialog" aria-labelledby="flowerTitle" tabindex="-1" hidden>
+  <div class="drag"><div class="grabber"></div><header><h2 id="flowerTitle">Pressed flower</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
+  <div class="panel-body"><div class="tiles" id="flowerTiles" role="radiogroup" aria-labelledby="flowerTitle"></div></div>
+</section>
+
+<section class="panel wide" id="phonePanel" role="dialog" aria-labelledby="phoneTitle" tabindex="-1" hidden>
+  <div class="drag"><div class="grabber"></div><header><h2 id="phoneTitle">TypeWrite for iPhone</h2><button class="text-btn" type="button" data-close>Done</button></header></div>
+  <div class="panel-body">
+    <p class="lede">The same machine as a native iPhone app, with real haptics. Paste this into Terminal on a Mac:</p>
+    <div class="cmd"><code id="cmdText">curl -fsSL https://raw.githubusercontent.com/MSreeGaneshNaik/TypeWrite/main/install.sh | bash</code><button class="btn" id="copyCmd" type="button">Copy</button></div>
+    <ol class="steps">
+      <li>It builds TypeWrite with Xcode, which is free in the Mac App Store.</li>
+      <li>Plug in your iPhone to install it there, signed with your own Apple ID. Without a phone, it opens in the iPhone Simulator.</li>
+      <li>Paste the same line again any time. It updates when there's something new.</li>
+    </ol>
+    <p class="note">Source and the full guide: <a href="https://github.com/MSreeGaneshNaik/TypeWrite">github.com/MSreeGaneshNaik/TypeWrite</a></p>
+  </div>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastText"></span><button id="toastAction" type="button" hidden></button></div>
+
+<script>
+"use strict";
+/* ============================================================
+   TypeWrite for the web. Same rules and sounds as the iPhone app;
+   the page is drawn in three.js: aged paper, cloth-ribbon ink, a steel rod.
+   ============================================================ */
+
+// ---------- Metrics (the fixed pitch of the machine) ----------
+const COLS = 30, ADV = 10.2, LH = 26, SIDE = 26, TOP = 70, TOP_FLOWER = 138, BELL_COL = COLS - 6, MAX_CHARS = 40000;
+const PAPER_W = COLS * ADV + SIDE * 2;
+
+// grain: mottling and tooth; age: yellowing, browned edges and foxing; laid: laid and chain lines; fibre: visible fibres.
+const PAPERS = [
+  { id: "cream", name: "Old paper", color: "#ECE7DB", grain: 1, age: 0.5, laid: 0.6, fibre: 0.9 },
+  { id: "bright", name: "Bond", color: "#EFEDE7", grain: 0.75, age: 0.2, laid: 0, fibre: 0.6 },
+  { id: "kraft", name: "Kraft", color: "#CFB58D", grain: 1.3, age: 0.45, laid: 0, fibre: 1.5 },
+  { id: "onion", name: "Onionskin", color: "#E4E2D8", grain: 0.6, age: 0.6, laid: 0, fibre: 0.4 },
+];
+const INKS = [
+  { id: "black", name: "Black", color: "#2A2725" },
+  { id: "red", name: "Red", color: "#9C2B22" },
+  { id: "blue", name: "Blue", color: "#28346E" },
+  { id: "sepia", name: "Worn", color: "#5A4636" },
+];
+const FACES = [
+  { id: "courier", name: "Pica", family: "Courier Prime", size: 17 },
+  { id: "elite", name: "Elite", family: "Special Elite", size: 15.5 },
+];
+const FLOWERS = [
+  { id: "none", name: "None" }, { id: "marigold", name: "Marigold" }, { id: "rose", name: "Rose" },
+  { id: "lavender", name: "Lavender" }, { id: "fern", name: "Fern" }, { id: "daisy", name: "Daisy" },
+];
+const byId = (list, id) => list.find(x => x.id === id) || list[0];
+
+// ---------- Seeded randomness: SplitMix64, identical to the app ----------
+const MASK = (1n << 64n) - 1n, GOLDEN = 0x9E3779B97F4A7C15n;
+function splitmix(seed) {
+  let state = BigInt.asUintN(64, BigInt(seed));
+  const next = () => {
+    state = (state + GOLDEN) & MASK;
+    let z = state;
+    z = ((z ^ (z >> 30n)) * 0xBF58476D1CE4E5B9n) & MASK;
+    z = ((z ^ (z >> 27n)) * 0x94D049BB133111EBn) & MASK;
+    return z ^ (z >> 31n);
+  };
+  const unit = () => Number(next() >> 11n) / 9007199254740992;
+  return { unit, sym: r => (unit() * 2 - 1) * r };
+}
+// How one strike of a type bar landed: nudge, baseline, tilt, ink and bleed.
+function inkStrike(seed, index) {
+  const r = splitmix(BigInt(seed) ^ ((BigInt(index) * GOLDEN) & MASK));
+  const dx = r.sym(0.35), dy = r.sym(0.6), rot = r.sym(1.1) * Math.PI / 180, roll = r.unit();
+  let opacity = 0.84 + r.unit() * 0.16, bleed = 0.16 + r.unit() * 0.12;
+  if (roll < 0.06) { opacity = 0.5 + r.unit() * 0.15; bleed = 0.06; }
+  else if (roll > 0.96) { opacity = 1; bleed = 0.34; }
+  return { dx, dy, rot, opacity, bleed };
+}
+
+// ---------- The typing engine: same rules as TypeLayout and TypistCore ----------
+const segmenter = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
+const graphemes = s => segmenter ? Array.from(segmenter.segment(s), x => x.segment) : Array.from(s);
+function sanitize(input) {
+  let out = "";
+  for (const ch of String(input).replace(/\r\n?/g, "\n")) {
+    const c = ch.codePointAt(0);
+    if (c === 10 || c === 0x2028 || c === 0x2029) out += "\n";
+    else if (c === 9) out += "    ";
+    else if (c < 32 || (c >= 0x7F && c <= 0x9F)) continue;
+    else out += ch;
+  }
+  return out;
+}
+function emptyLayout() { return { lines: [{ glyphs: [], ret: false }], line: 0, col: 0 }; }
+// Appends one character and reports how the carriage moved.
+function strikeInto(L, ch, index) {
+  if (ch === "\n") {
+    L.lines[L.lines.length - 1].ret = true;
+    L.lines.push({ glyphs: [], ret: false }); L.line = L.lines.length - 1; L.col = 0;
+    return "returned";
+  }
+  let move = "advanced";
+  if (L.col >= COLS) {
+    if (ch === " ") { L.lines.push({ glyphs: [], ret: false }); L.line = L.lines.length - 1; L.col = 0; return "wrappedOnSpace"; }
+    const g = L.lines[L.lines.length - 1].glyphs;
+    let space = -1;
+    for (let i = g.length - 1; i >= 0; i--) if (g[i].ch === " ") { space = i; break; }
+    let carried = [];
+    if (space >= 0 && space < g.length - 1) carried = g.splice(space + 1);
+    L.lines.push({ glyphs: carried.map((x, c) => ({ ch: x.ch, index: x.index, col: c })), ret: false });
+    L.line = L.lines.length - 1; L.col = carried.length;
+    move = "wrapped";
+  }
+  L.lines[L.lines.length - 1].glyphs.push({ ch, index, col: L.col });
+  L.col += 1;
+  return move;
+}
+function layoutChars(chars) { const L = emptyLayout(); chars.forEach((c, i) => strikeInto(L, c, i)); return L; }
+
+class Typist {
+  constructor(text) { this.chars = graphemes(sanitize(text || "")).slice(0, MAX_CHARS); this.layout = layoutChars(this.chars); }
+  get text() { return this.chars.join(""); }
+  type(input) {
+    const clean = graphemes(sanitize(input));
+    if (!clean.length) return [];
+    if (this.chars.length >= MAX_CHARS) return ["jammed"];
+    const accepted = clean.slice(0, MAX_CHARS - this.chars.length);
+    if (accepted.length > 1) {
+      for (const c of accepted) { strikeInto(this.layout, c, this.chars.length); this.chars.push(c); }
+      return ["key"];
+    }
+    const c = accepted[0], before = { line: this.layout.line, col: this.layout.col };
+    const move = strikeInto(this.layout, c, this.chars.length);
+    this.chars.push(c);
+    const events = [];
+    if (move === "returned" || move === "wrappedOnSpace") events.push("return");
+    else if (move === "wrapped") events.push("return", "key");
+    else events.push(c === " " ? "space" : "key");
+    if (this.layout.line === before.line && before.col < BELL_COL && this.layout.col >= BELL_COL) events.push("bell");
+    return events;
+  }
+  backspace() {
+    if (!this.chars.length) return ["jammed"];
+    this.chars.pop(); this.layout = layoutChars(this.chars);
+    return ["backspace"];
+  }
+}
+
+// ---------- Storage (sheets live in this browser) ----------
+const store = {
+  get(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; } },
+  set(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (e) {   // private mode or full: keep going in memory, and say so once
+      if (!store.warned) { store.warned = true; setTimeout(() => toast("This browser won't keep your sheets. Download yours before you leave."), 0); }
+      return false;
+    }
+  },
+};
+const newSeed = () => 1 + Math.floor(Math.random() * 2147483646);
+function newSheet() {
+  const d = store.get("tw.defaults", {});
+  return { id: "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: "", created: Date.now(), updated: Date.now(),
+           paper: d.paper || "cream", ink: d.ink || "black", face: d.face || "courier", flower: d.flower || "none", seed: newSeed() };
+}
+let sheets = store.get("tw.sheets", []).filter(s => s && typeof s.text === "string");
+let sheet = sheets.find(s => s.id === store.get("tw.current", "")) || null;
+let fresh = false;
+if (!sheet) { sheet = newSheet(); fresh = true; }
+let typist = new Typist(sheet.text);
+let saveTimer = 0;
+function persist(now) {
+  clearTimeout(saveTimer);
+  const write = () => {
+    const blank = !sheet.text.trim();
+    sheets = sheets.filter(s => s.id !== sheet.id && s.text.trim());
+    if (!blank) sheets.unshift(sheet);
+    store.set("tw.sheets", sheets); store.set("tw.current", sheet.id);
+  };
+  if (now) write(); else saveTimer = setTimeout(write, 400);
+}
+
+// ---------- Sound: decoded once, played through Web Audio with a little pitch drift ----------
+const SOUND_DIR = "TypeWrite/Resources/Sounds/";
+const SOUND_NAMES = ["key1", "key2", "key3", "key4", "space", "backspace", "bell", "return", "feed", "jam"];
+const audio = { ctx: null, buffers: {}, loading: null, lastKey: "" };
+let soundOn = store.get("tw.sound", true), buzzOn = store.get("tw.buzz", true);
+function unlockAudio() {
+  if (!audio.ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audio.ctx = new AC({ latencyHint: "interactive" });
+    audio.gain = audio.ctx.createGain(); audio.gain.gain.value = 0.9; audio.gain.connect(audio.ctx.destination);
+    audio.loading = Promise.all(SOUND_NAMES.map(async name => {
+      try {
+        const res = await fetch(SOUND_DIR + name + ".wav");
+        const data = await res.arrayBuffer();
+        audio.buffers[name] = await new Promise((ok, bad) => audio.ctx.decodeAudioData(data, ok, bad));
+      } catch (e) { /* that sound just stays silent */ }
+    }));
+  }
+  if (audio.ctx.state === "suspended") audio.ctx.resume();
+}
+function play(name) {
+  if (!soundOn || !audio.ctx || !audio.buffers[name]) return;
+  const src = audio.ctx.createBufferSource();
+  src.buffer = audio.buffers[name];
+  const jitter = name === "bell" ? 0.008 : 0.035;
+  src.playbackRate.value = 1 + (Math.random() * 2 - 1) * jitter;
+  src.connect(audio.gain); src.start();
+}
+function playKey() {
+  const keys = ["key1", "key2", "key3", "key4"];
+  let pick = keys[Math.floor(Math.random() * 4)];
+  if (pick === audio.lastKey) pick = keys[(keys.indexOf(pick) + 1) % 4];
+  audio.lastKey = pick; play(pick);
+}
+function buzz(ms) { if (buzzOn && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+function feedback(events) {
+  for (const e of events) {
+    if (e === "key") { playKey(); buzz(6); }
+    else if (e === "space") { play("space"); buzz(4); }
+    else if (e === "bell") play("bell");
+    else if (e === "return") { play("return"); buzz(14); }
+    else if (e === "backspace") { play("backspace"); buzz(4); }
+    else if (e === "jammed") { play("jam"); buzz([20, 40, 20]); }
+  }
+}
+
+// ---------- Paper texture: a seamless tile of specks, fibres and mottling ----------
+function makeGrain() {
+  const side = 384, k = 2, c = document.createElement("canvas");
+  c.width = c.height = side * k;
+  const g = c.getContext("2d"); g.scale(k, k);
+  const r = splitmix(0xC1AC5EEDn);
+  const wrapped = (x, y, reach, draw) => {
+    for (const dx of [-side, 0, side]) for (const dy of [-side, 0, side]) {
+      const px = x + dx, py = y + dy;
+      if (px + reach < 0 || px - reach > side || py + reach < 0 || py - reach > side) continue;
+      draw(px, py);
+    }
+  };
+  for (let i = 0; i < 28; i++) {
+    const x = r.unit() * side, y = r.unit() * side, rad = 24 + r.unit() * 60, a = 0.012 + r.unit() * 0.014;
+    g.fillStyle = `rgba(107,84,56,${a})`;
+    wrapped(x, y, rad, (px, py) => { g.beginPath(); g.arc(px, py, rad, 0, Math.PI * 2); g.fill(); });
+  }
+  for (let i = 0; i < 2400; i++) {
+    const x = r.unit() * side, y = r.unit() * side, rad = 0.2 + r.unit() * 0.7, warm = r.unit(), a = 0.025 + r.unit() * 0.09;
+    g.fillStyle = `rgba(${Math.round((0.30 + warm * 0.15) * 255)},${Math.round((0.26 + warm * 0.08) * 255)},51,${a})`;
+    wrapped(x, y, rad, (px, py) => { g.beginPath(); g.arc(px, py, rad, 0, Math.PI * 2); g.fill(); });
+  }
+  g.lineCap = "round"; g.lineWidth = 0.35;
+  for (let i = 0; i < 130; i++) {
+    const x = r.unit() * side, y = r.unit() * side, len = 4 + r.unit() * 12, ang = r.unit() * Math.PI * 2, bend = (r.unit() * 2 - 1) * 3;
+    const ex = Math.cos(ang) * len, ey = Math.sin(ang) * len, cx = ex / 2 - Math.sin(ang) * bend, cy = ey / 2 + Math.cos(ang) * bend;
+    g.strokeStyle = `rgba(89,74,54,${0.05 + r.unit() * 0.05})`;
+    wrapped(x, y, len, (px, py) => { g.beginPath(); g.moveTo(px, py); g.quadraticCurveTo(px + cx, py + cy, px + ex, py + ey); g.stroke(); });
+  }
+  return c;
+}
+let grainTile = null;
+
+// ---------- Pressed flowers, drawn as vector paths ----------
+function petal(len, w, round) {
+  const p = new Path2D();
+  p.moveTo(0, 0);
+  p.bezierCurveTo(len * 0.3, -w, len * round, -w * 0.9, len, 0);
+  p.bezierCurveTo(len * round, w * 0.9, len * 0.3, w, 0, 0);
+  p.closePath();
+  return p;
+}
+function curve(s, c, e) {
+  return {
+    point: t => { const u = 1 - t; return [u * u * s[0] + 2 * u * t * c[0] + t * t * e[0], u * u * s[1] + 2 * u * t * c[1] + t * t * e[1]]; },
+    angle: t => { const u = 1 - t; return Math.atan2(2 * u * (c[1] - s[1]) + 2 * t * (e[1] - c[1]), 2 * u * (c[0] - s[0]) + 2 * t * (e[0] - c[0])); },
+    stroke: (g, color, w) => { g.beginPath(); g.moveTo(s[0], s[1]); g.quadraticCurveTo(c[0], c[1], e[0], e[1]); g.strokeStyle = color; g.lineWidth = w; g.lineCap = "round"; g.stroke(); },
+  };
+}
+function place(g, path, at, angle, fill, edge, edgeW) {
+  g.save(); g.translate(at[0], at[1]); g.rotate(angle);
+  if (fill) { g.fillStyle = fill; g.fill(path); }
+  if (edge) { g.strokeStyle = edge; g.lineWidth = edgeW || 0.6; g.stroke(path); }
+  g.restore();
+}
+function leaf(g, cv, t, side, len, color, vein, round = 0.62, breadth = 0.28) {
+  const base = cv.point(t), angle = cv.angle(t) + Math.PI + side * 0.8;
+  place(g, petal(len, len * breadth, round), base, angle, color);
+  g.save(); g.translate(base[0], base[1]); g.rotate(angle); g.beginPath(); g.moveTo(0, 0); g.lineTo(len * 0.85, 0); g.strokeStyle = vein; g.lineWidth = 0.7; g.stroke(); g.restore();
+}
+function disc(g, at, rad, fill, dots, r) {
+  g.beginPath(); g.arc(at[0], at[1], rad, 0, Math.PI * 2); g.fillStyle = fill; g.fill();
+  for (let i = 0; i < 10; i++) {
+    const a = r.unit() * Math.PI * 2, d = r.unit() * rad * 0.75;
+    g.beginPath(); g.arc(at[0] + Math.cos(a) * d, at[1] + Math.sin(a) * d, 0.8, 0, Math.PI * 2); g.fillStyle = dots; g.fill();
+  }
+}
+const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const FLOWER_ART = {
+  marigold(g, r) {
+    const head = [0, -16], stalk = curve(head, [-10, 18], [8, 50]);
+    stalk.stroke(g, "#6E7A42", 2.6);
+    leaf(g, stalk, 0.55, 1, 20, "#74833F", "#56622E"); leaf(g, stalk, 0.76, -1, 16, "#74833F", "#56622E");
+    for (const ring of [[17, 25, "#D27A27", "#A9561A"], [12, 16, "#E49438", "#B86A1F"]]) {
+      const off = r.unit() * Math.PI * 2;
+      for (let i = 0; i < ring[0]; i++) {
+        const a = off + i / ring[0] * Math.PI * 2 + r.sym(0.06), len = ring[1] * (0.88 + r.unit() * 0.22);
+        place(g, petal(len, len * 0.28, 0.95), head, a, rgba(ring[2], 0.85 + r.unit() * 0.15), rgba(ring[3], 0.55));
+      }
+    }
+    disc(g, head, 6, "#7A4216", rgba("#5A3010", 0.8), r);
+  },
+  rose(g, r) {
+    const head = [0, -14], stalk = curve(head, [8, 16], [-4, 50]);
+    stalk.stroke(g, "#5C6B3A", 2.4);
+    leaf(g, stalk, 0.5, -1, 18, "#63743D", "#46532A", 0.78, 0.42); leaf(g, stalk, 0.72, 1, 15, "#63743D", "#46532A", 0.78, 0.42);
+    for (const layer of [[6, 20, 0.62, "#B4464E"], [5, 13, 0.7, "#A23A45"]]) {
+      const off = r.unit() * Math.PI * 2;
+      for (let i = 0; i < layer[0]; i++) {
+        const a = off + i / layer[0] * Math.PI * 2 + r.sym(0.12), len = layer[1] + r.unit() * 4;
+        place(g, petal(len, len * layer[2], 0.98), head, a, rgba(layer[3], 0.8), rgba("#8C2F3A", 0.5), 0.5);
+      }
+    }
+    let a = r.unit() * Math.PI * 2, rad = 7.5;
+    g.beginPath(); g.moveTo(head[0] + Math.cos(a) * rad, head[1] + Math.sin(a) * rad);
+    while (rad > 1) { a += 0.35; rad -= 0.3; g.lineTo(head[0] + Math.cos(a) * rad, head[1] + Math.sin(a) * rad); }
+    g.strokeStyle = rgba("#6E2230", 0.85); g.lineWidth = 1.1; g.lineCap = "round"; g.lineJoin = "round"; g.stroke();
+  },
+  lavender(g, r) {
+    const stalk = curve([-6, -46], [5, 0], [2, 50]);
+    stalk.stroke(g, "#76845A", 1.5);
+    leaf(g, stalk, 0.72, 1, 24, "#8A9670", "#6B7652", 0.62, 0.14); leaf(g, stalk, 0.8, -1, 21, "#8A9670", "#6B7652", 0.62, 0.14);
+    for (let step = 0; step < 13; step++) {
+      const t = 0.03 + step * 0.034, p = stalk.point(t), up = stalk.angle(t) + Math.PI, bud = 2.6 + step * 0.11;
+      for (const side of [-1, 1]) {
+        const tone = (step + side) % 2 === 0 ? "#8C78B6" : "#7A66A7";
+        place(g, petal(bud * 2.3, bud * 0.75, 0.9), p, up + side * (0.5 + r.sym(0.12)), rgba(tone, 0.9));
+      }
+    }
+    place(g, petal(6, 2, 0.9), stalk.point(0), stalk.angle(0) + Math.PI, "#8C78B6");
+  },
+  fern(g, r) {
+    const rachis = curve([-4, -48], [10, 0], [4, 50]);
+    rachis.stroke(g, "#5E7A40", 1.6);
+    for (let t = 0.04; t < 0.9; t += 0.055) {
+      const p = rachis.point(t), up = rachis.angle(t) + Math.PI, len = 4 + 22 * Math.pow(t, 0.75);
+      for (const side of [-1, 1]) place(g, petal(len, len * 0.2, 0.6), p, up + side * (1.15 + r.sym(0.06)), rgba("#6E8D4C", 0.8 + r.unit() * 0.15));
+    }
+  },
+  daisy(g, r) {
+    const head = [0, -14], stalk = curve(head, [-6, 20], [6, 50]);
+    stalk.stroke(g, "#6E7D46", 2.2);
+    leaf(g, stalk, 0.66, 1, 19, "#75854A", "#56633A");
+    const off = r.unit() * Math.PI * 2;
+    for (let i = 0; i < 20; i++) {
+      const a = off + i / 20 * Math.PI * 2 + r.sym(0.05), len = 22 + r.unit() * 3;
+      place(g, petal(len, 4.2, 0.97), head, a, "#F8F4E8", "#CBBFA4", 0.7);
+    }
+    disc(g, head, 7, "#DDA52C", rgba("#B07C17", 0.8), r);
+  },
+};
+function drawFlower(g, kind, cx, cy, size, rotationDeg, seed) {
+  if (kind === "none" || !FLOWER_ART[kind]) return;
+  g.save(); g.translate(cx, cy); g.rotate(rotationDeg * Math.PI / 180); g.scale(size / 100, size / 100); g.globalAlpha *= 0.92;
+  FLOWER_ART[kind](g, splitmix((BigInt(seed) + 0x5EEDn) & MASK));
+  g.restore();
+}
+
+// ---------- Drawing a sheet: shared by the machine, the thumbnails and the download ----------
+const strikeCache = new Map();
+function strikeFor(seed, index) {
+  const key = seed + ":" + index;
+  let s = strikeCache.get(key);
+  if (!s) { s = inkStrike(seed, index); strikeCache.set(key, s); if (strikeCache.size > 120000) strikeCache.clear(); }
+  return s;
+}
+function topMargin(s) { return s.flower === "none" ? TOP : TOP_FLOWER; }
+// g: context already scaled to sheet points. view: visible height in sheet points.
+function drawSheet(g, s, L, ox, oy, paperH, viewW, viewH, shadow) {
+  const paper = byId(PAPERS, s.paper), ink = byId(INKS, s.ink), face = byId(FACES, s.face);
+  const h = paperH != null ? paperH : Math.max(viewH - oy + 240, 400);
+  if (shadow) {
+    for (const [spread, a] of [[16, 0.05], [9, 0.08], [4, 0.12], [1.5, 0.2]]) {
+      g.fillStyle = `rgba(0,0,0,${a})`;
+      g.beginPath(); g.roundRect(ox - spread, oy - spread + spread * 0.45, PAPER_W + spread * 2, h + spread * 2, spread); g.fill();
+    }
+  }
+  g.fillStyle = paper.color; g.fillRect(ox, oy, PAPER_W, h);
+  if (grainTile) {
+    const pattern = g.createPattern(grainTile, "repeat");
+    pattern.setTransform(new DOMMatrix().translate(ox, oy).scale(0.5));
+    g.save(); g.globalCompositeOperation = "multiply"; g.globalAlpha = paper.grain; g.fillStyle = pattern; g.fillRect(ox, oy, PAPER_W, h); g.restore();
+  }
+  g.strokeStyle = "rgba(0,0,0,.08)"; g.lineWidth = 0.75; g.strokeRect(ox, oy, PAPER_W, h);
+
+  if (s.flower !== "none") {
+    const r = splitmix(BigInt(s.seed) ^ 0xF10EF10En);
+    drawFlower(g, s.flower, ox + PAPER_W - 70, oy + 66, 104, -24 + r.sym(10), s.seed);
+  }
+
+  const first = Math.max(0, Math.floor((-LH * 2 - (oy + topMargin(s))) / LH));
+  const last = Math.min(L.lines.length - 1, Math.floor((viewH + LH * 2 - (oy + topMargin(s))) / LH));
+  g.font = `${face.size}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = ink.color;
+  const left = ox + SIDE;
+  for (let li = first; li <= last; li++) {
+    const base = oy + topMargin(s) + li * LH;
+    for (const gl of L.lines[li].glyphs) {
+      if (gl.ch === " ") continue;
+      const k = strikeFor(s.seed, gl.index), cx = left + (gl.col + 0.5) * ADV;
+      g.save(); g.translate(cx + k.dx, base + k.dy); g.rotate(k.rot);
+      g.globalAlpha = k.bleed; g.fillText(gl.ch, 0.45, 0.2);
+      g.globalAlpha = k.opacity; g.fillText(gl.ch, 0, 0);
+      g.restore();
+    }
+  }
+}
+function sheetHeight(s, L) { return Math.max(topMargin(s) + L.lines.length * LH + 70, PAPER_W * 1.294); }
+
+// ---------- What a single strike leaves beyond its position: the ribbon, the slug, the paper ----------
+// Typebar faces rarely land flat: one side prints lighter ("off its feet"). Dirty slugs fill counters.
+// A cloth ribbon fades slowly as it is used. All seeded, so a letter never changes once struck.
+const lookCache = new Map();
+function glyphLook(seed, index, ch) {
+  const key = seed + ":" + index;
+  let k = lookCache.get(key);
+  if (k) return k;
+  const base = strikeFor(seed, index);
+  const r = splitmix((BigInt(seed) * 31n + BigInt(index) * 0x9E37n + 0xA11CEn) & MASK);
+  const angle = r.unit() * Math.PI * 2, tilt = r.unit() < 0.28 ? 0.18 + r.unit() * 0.24 : 0.03 + r.unit() * 0.1;
+  const clog = r.unit() < 0.05, ghost = r.unit() < 0.018;
+  const wear = 0.9 + 0.1 * Math.sin(index * 0.017 + (seed % 97)) * Math.cos(index * 0.0041 + (seed % 13));
+  let strength = Math.min(1, base.opacity * wear);
+  if (".,;:'!".includes(ch)) strength = Math.max(strength, 0.97);   // small faces strike hard
+  k = { dx: base.dx, dy: base.dy, rot: base.rot, strength, angle, tilt, clog, ghost };
+  lookCache.set(key, k);
+  if (lookCache.size > 120000) lookCache.clear();
+  return k;
+}
+const COUNTERS = "aeobdgpqABDOPQR04689&@";
+// Draws ink as data for the paper shader: alpha is the letter's shape, green is how hard it struck.
+function drawInk(g, s, L, top, h) {
+  const face = byId(FACES, s.face), tm = topMargin(s);
+  const first = Math.max(0, Math.floor((top - tm - LH) / LH)), last = Math.min(L.lines.length - 1, Math.ceil((top + h - tm + LH) / LH));
+  g.font = `${face.size}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic";
+  const tone = v => `rgb(255,${Math.round(Math.max(0, Math.min(1, v)) * 255)},0)`;
+  for (let li = first; li <= last; li++) {
+    const base = tm + li * LH;
+    for (const gl of L.lines[li].glyphs) {
+      if (gl.ch === " ") continue;
+      const k = glyphLook(s.seed, gl.index, gl.ch), cx = SIDE + (gl.col + 0.5) * ADV;
+      g.save(); g.translate(cx + k.dx, base + k.dy); g.rotate(k.rot);
+      if (k.ghost) { g.fillStyle = tone(k.strength * 0.32); g.fillText(gl.ch, 0.7, -0.45); }
+      const ux = Math.cos(k.angle) * ADV * 0.55, uy = Math.sin(k.angle) * ADV * 0.55 - face.size * 0.3;
+      const grad = g.createLinearGradient(-ux, -face.size * 0.3 - uy, ux, -face.size * 0.3 + uy);
+      grad.addColorStop(0, tone(k.strength * (1 - k.tilt)));
+      grad.addColorStop(1, tone(k.strength));
+      g.fillStyle = grad; g.fillText(gl.ch, 0, 0);
+      if (k.clog && COUNTERS.includes(gl.ch)) {
+        const upper = gl.ch === gl.ch.toUpperCase() && !"04689&".includes(gl.ch);
+        g.fillStyle = tone(k.strength * 0.85); g.beginPath();
+        g.ellipse(0, -face.size * (upper ? 0.42 : 0.24), face.size * 0.13, face.size * (upper ? 0.16 : 0.1), 0, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+    }
+  }
+}
+
+// ---------- The machine ----------
+const $ = sel => document.querySelector(sel);
+const stage = $("#stage"), keys = $("#keys"), hud = $("#hud"), ghost = $("#ghost");
+const hudSides = [...document.querySelectorAll(".hud-side")];
+// The first-line prompt is part of the page: tapping it starts the machine like tapping the paper.
+ghost.addEventListener("pointerdown", e => { e.preventDefault(); if (!panelOpen()) setTyping(true); });
+const forgetHudBoxes = () => hudSides.forEach(el => { el.box = null; });
+const motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+let reduceMotion = motionQuery.matches;
+if (motionQuery.addEventListener) motionQuery.addEventListener("change", e => { reduceMotion = e.matches; kick(); });
+const finePointer = () => matchMedia("(pointer: fine)").matches;
+
+// Where the parts sit, in sheet points relative to the line being typed (y up).
+const ROD_Y = -42, ROD_R = 7, PILL_R = 13.5, PILL_LEN = 82, PAPER_SHARE = 0.8, FOV = 30, BOW = 9, CURL = 44;
+let typing = false, review = 0, lampOn = store.get("tw.lamp", false);
+let W = 0, H = 0, DPR = 1, zoom = 1;
+const spring = {
+  x: { v: 0, vel: 0, to: 0, resp: 0.1, damp: 0.95 },     // the type guide along the rod (points from the paper's left edge)
+  y: { v: 0, vel: 0, to: 0, resp: 0.1, damp: 0.95 },     // how far the paper has rolled up
+  sy: { v: 0, vel: 0, to: 0, resp: 0.4, damp: 1 },      // the strike line on screen (px)
+  lamp: { v: 0, vel: 0, to: 0, resp: 0.55, damp: 1 },   // desk lamp, 0 to 1
+};
+let running = false, lastT = 0, coast = null;
+
+function camDist() { return (H / 2) / zoom / Math.tan(FOV * Math.PI / 360); }
+function paperDepth(x) { const nx = 2 * x / PAPER_W; return -BOW * nx * nx; }
+// Where a point on the page lands on screen (x, y in points, y up from the strike line).
+function toScreen(x, y) {
+  const camY = (spring.sy.v - H / 2) / zoom, d = camDist(), k = GL ? d / (d - paperDepth(x)) : 1;
+  return [W / 2 + x * zoom * k, H / 2 - (y - camY) * zoom * k];
+}
+function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
+function setFeel(names, resp, damp) { for (const n of names) { spring[n].resp = resp; spring[n].damp = damp; } }
+function caretX() { return SIDE + (Math.min(typist.layout.col, COLS) + 0.5) * ADV; }
+function viewportH() { const vv = window.visualViewport; return vv ? vv.height + vv.offsetTop : innerHeight; }
+function reviewLimit() { return typist.layout.line * LH + topMargin(sheet); }
+function retarget(jump) {
+  spring.x.to = caretX();
+  spring.y.to = typist.layout.line * LH - review;
+  spring.sy.to = Math.round(viewportH() * 0.6);
+  spring.lamp.to = lampOn ? 1 : 0;
+  if (jump) for (const k in spring) { spring[k].v = spring[k].to; spring[k].vel = 0; }
+}
+function kick() { if (!running) { running = true; lastT = performance.now(); requestAnimationFrame(frame); } }
+function stepSpring(s, dt, resp, damp) {
+  const k = Math.pow(2 * Math.PI / resp, 2), c = 4 * Math.PI * damp / resp;
+  s.vel += (-k * (s.v - s.to) - c * s.vel) * dt; s.v += s.vel * dt;
+}
+// Momentum after a flick: UIScrollView's deceleration, 0.998 per millisecond.
+const DECEL = 0.998;
+const project = v => (v / 1000) * DECEL / (1 - DECEL);
+function frame(t) {
+  const dt = clamp((t - lastT) / 1000, 0, 0.05); lastT = Math.max(lastT, t);
+  if (coast) {
+    review += coast.v * dt; coast.v *= Math.pow(DECEL, dt * 1000);
+    const lim = reviewLimit();
+    if (review < 0 || review > lim) {                     // ran into the end: hand the speed to a spring
+      review = Math.min(Math.max(review, 0), lim);
+      spring.y.to = typist.layout.line * LH - review; spring.y.vel = -coast.v; setFeel(["y"], 0.42, 1); coast = null;
+    } else {
+      spring.y.to = spring.y.v = typist.layout.line * LH - review; spring.y.vel = -coast.v;
+      if (Math.abs(coast.v) < 4) { coast = null; spring.y.vel = 0; }
+    }
+  }
+  const steps = Math.max(1, Math.ceil(dt * 240)), h = dt / steps;
+  for (const k in spring) {
+    const s = spring[k];
+    if (coast && k === "y") continue;
+    const r = reduceMotion ? 0.06 : s.resp, d = reduceMotion ? 1 : s.damp;
+    for (let i = 0; i < steps; i++) stepSpring(s, h, r, d);
+  }
+  draw();
+  const settled = !coast && Object.values(spring).every(s => Math.abs(s.v - s.to) < 0.01 && Math.abs(s.vel) < 0.01);
+  if (settled) { for (const k in spring) { spring[k].v = spring[k].to; spring[k].vel = 0; } draw(); running = false; }
+  else requestAnimationFrame(frame);
+}
+function resize() {
+  W = innerWidth; H = innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+  zoom = PAPER_SHARE * W / PAPER_W;
+  if (GL) GL.resize(); else resize2D();
+  forgetHudBoxes(); retarget(true); kick();
+}
+function draw() {
+  if (GL) GL.render(); else draw2D();
+  const topY = topMargin(sheet) + spring.y.v, paperTop = toScreen(0, topY)[1] + 6;
+  const left = toScreen(-PAPER_W / 2, 0)[0], right = toScreen(PAPER_W / 2, 0)[0];
+  for (const el of hudSides) {
+    if (!el.box) el.box = el.getBoundingClientRect();
+    const cx = el.box.left + el.box.width / 2, cy = el.box.top + el.box.height / 2;
+    el.classList.toggle("on-desk", spring.lamp.v > 0.5 || cy < paperTop || cx < left + 6 || cx > right - 6);
+  }
+  placeGhost();
+}
+function placeGhost() {
+  const blank = !typist.chars.length;
+  ghost.hidden = !blank;
+  if (!blank) return;
+  const face = byId(FACES, sheet.face), [startX, base] = toScreen(SIDE - PAPER_W / 2, spring.y.v);
+  const ask = $("#ghostAsk"), start = $("#ghostStart");
+  ask.hidden = typing;
+  ask.textContent = finePointer() ? "No first line yet? Just start typing." : "No first line yet? Tap the page.";
+  ask.style.fontSize = Math.max(12, face.size * 0.46 * zoom) + "px";
+  ask.style.left = W / 2 + "px"; ask.style.top = (base - LH * 1.35 * zoom) + "px";
+  start.style.fontFamily = `"${face.family}", var(--mono)`;
+  start.style.fontSize = face.size * zoom + "px";
+  start.style.left = startX + "px"; start.style.top = base + "px";
+  start.style.opacity = typing ? "0.55" : "1";
+}
+
+// ---------- three.js: the page, the rod and the guide ----------
+let GL = null, THREE = null;
+const PAPER_VS = `
+uniform float uPaperW, uPaperH, uWinTop, uWinH, uTopY, uBow, uCurl, uFlat;
+varying vec2 vSheet; varying vec3 vWorld; varying vec3 vNormal; varying float vCurl;
+void main() {
+  float sx = (position.x + 0.5) * uPaperW;
+  float sy = clamp(uWinTop + (0.5 - position.y) * uWinH, 0.0, uPaperH);
+  vSheet = vec2(sx, sy);
+  float k = 1.0 - uFlat;
+  float nx = sx / uPaperW * 2.0 - 1.0;
+  float t = clamp(1.0 - sy / 64.0, 0.0, 1.0);
+  float shape = 0.3 + 0.7 * nx * nx;
+  // A sheet in a machine is never flat: it bows a little, and its top edge curls away.
+  float z = -(uBow * nx * nx + uCurl * t * t * shape) * k;
+  float dzdx = -(uBow * 2.0 * nx + uCurl * t * t * 1.4 * nx) * (2.0 / uPaperW) * k;
+  float dzdsy = (uCurl * 2.0 * t * shape / 64.0) * k;
+  vNormal = normalize(vec3(-dzdx, dzdsy, 1.0));
+  vCurl = t * k;
+  vec4 wp = modelMatrix * vec4(sx - uPaperW * 0.5, uTopY - sy, z, 1.0);
+  vWorld = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const PAPER_FS = `
+uniform float uPaperW, uPaperH, uFlat, uSeedX, uSeedY;
+uniform vec3 uPaperCol, uInkCol;
+uniform float uGrain, uAge, uLaid, uFibre;
+uniform sampler2D uInk; uniform float uInkTop, uInkH;
+uniform sampler2D uFlower; uniform vec4 uFlowerRect; uniform float uFlowerOn;
+uniform float uLamp; uniform vec3 uLampPos; uniform float uLampReach;
+uniform float uPxPerPt; uniform vec2 uView;
+uniform float uRodY, uRodR, uCaretX;
+varying vec2 vSheet; varying vec3 vWorld; varying vec3 vNormal; varying float vCurl;
+
+float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * vnoise(p); p = p * 2.03 + vec2(11.7, 5.3); a *= 0.5; } return v; }
+
+void main() {
+  vec2 s = vSheet;
+  vec2 p = s + vec2(uSeedX, uSeedY);
+  // Worn, slightly uneven edges.
+  float rag = (vnoise(p * 0.45) - 0.5) * 0.55 + (vnoise(p * 1.9) - 0.5) * 0.14;
+  float inset = min(min(s.x, uPaperW - s.x), min(s.y, uPaperH - s.y)) - 0.35 - rag;
+  float alpha = clamp(inset * uPxPerPt + 0.5, 0.0, 1.0);
+  if (alpha <= 0.0) discard;
+
+  // ---- The paper: tone, mottling, fibres, specks, foxing, browned edges, laid and chain lines ----
+  float mott = fbm(p / 95.0);
+  float mid = fbm(p / 16.0);
+  float tooth = vnoise(p * 1.6) * 0.6 + vnoise(p * 4.1) * 0.4;
+  float f1 = vnoise(vec2(p.x * 1.1, p.y * 0.09) + 3.0), f2 = vnoise(vec2(p.x * 0.09, p.y * 1.1) + 9.0);
+  float fib = smoothstep(0.72, 0.95, max(f1 * vnoise(p * 0.35), f2 * vnoise(p * 0.33 + 4.0)) * 1.25);
+  vec2 sc = floor(p / 7.0);
+  vec2 sp = (sc + 0.2 + 0.6 * vec2(hash(sc + 1.3), hash(sc + 7.1))) * 7.0;
+  float sr = 0.22 + 0.5 * pow(hash(sc + 3.7), 3.0);
+  float speck = step(0.83, hash(sc + 11.0)) * (1.0 - smoothstep(sr * 0.35, sr, length(p - sp)));
+  vec2 fc = floor(p / 52.0);
+  vec2 fp = (fc + 0.2 + 0.6 * vec2(hash(fc + 2.1), hash(fc + 6.4))) * 52.0;
+  float fr = 1.5 + 9.0 * pow(hash(fc + 4.4), 2.0);
+  float fd = length(p - fp) + (fbm(p / 3.5) - 0.5) * fr * 1.1;
+  float fox = step(1.0 - 0.14 * uAge, hash(fc + 8.8)) * (1.0 - smoothstep(fr * 0.25, fr, fd));
+  float foxCore = fox * (1.0 - smoothstep(0.0, fr * 0.35, fd));
+  float ed = min(min(s.x, uPaperW - s.x), min(s.y, uPaperH - s.y));
+  float edge = (1.0 - smoothstep(0.0, 18.0 + 26.0 * fbm(p / 28.0), ed)) * uAge;
+  float laidRib = uLaid * (0.5 + 0.5 * sin(s.y * 6.2831853 / 2.4));
+  float cx = abs(fract((s.x + 9.0) / 72.0) - 0.5) * 72.0;
+  float chain = uLaid * (1.0 - smoothstep(0.5, 2.2, cx));
+
+  vec3 col = uPaperCol;
+  col = mix(col, col * vec3(1.0, 0.965, 0.88), uAge * 0.55);
+  col *= 1.0 - uGrain * (0.075 * (mott - 0.5) + 0.04 * (mid - 0.5) + 0.03 * (tooth - 0.5));
+  col = mix(col, col * vec3(0.84, 0.8, 0.72), fib * 0.32 * uFibre);
+  col = mix(col, vec3(0.19, 0.16, 0.13), speck * 0.82);
+  col = mix(col, col * vec3(0.8, 0.63, 0.45), fox * 0.42 + foxCore * 0.25);
+  col = mix(col, col * vec3(0.79, 0.67, 0.5), edge * 0.62);
+  col *= 1.0 - 0.012 * laidRib - 0.022 * chain;
+
+  // ---- The ink: a cloth ribbon pressed into paper fibres ----
+  vec2 iuv = vec2(s.x / uPaperW, (s.y - uInkTop) / uInkH);
+  float inside = step(0.0, iuv.y) * step(iuv.y, 1.0);
+  vec4 sharp = texture2D(uInk, iuv);
+  vec4 soft = texture2D(uInk, iuv, 1.4);
+  float halo = texture2D(uInk, iuv, 3.2).a;
+  float strength = max(sharp.g, soft.g / max(soft.a, 0.05) * step(0.02, soft.a));
+  strength = clamp(strength, 0.0, 1.0);
+  float n1 = vnoise(p * 3.4 + 7.0), n2 = vnoise(p * 1.1 + 3.0);
+  float shape = mix(sharp.a, soft.a, 0.45);
+  float thr = 0.47 + (n1 - 0.5) * 0.36 + (n2 - 0.5) * 0.14 + (1.0 - strength) * 0.14;
+  float cov = smoothstep(thr - 0.07, thr + 0.07, shape);
+  vec2 q = vec2(s.x + s.y, s.x - s.y) * 1.4;
+  float weave = 0.74 + 0.26 * smoothstep(-0.3, 0.7, sin(q.x * 6.2831853) * sin(q.y * 6.2831853));
+  float weaveOn = smoothstep(1.4, 3.2, uPxPerPt);
+  float inkAmt = cov * strength * mix(1.0, weave, 0.85 * weaveOn);
+  inkAmt = max(inkAmt, halo * 0.11 * strength);
+  inkAmt *= (0.9 + 0.1 * tooth) * inside;
+  col = mix(col, uInkCol, clamp(inkAmt, 0.0, 1.0) * 0.95);
+
+  // ---- The pressed flower: dyes soaked into the sheet, and a faint stain around it ----
+  if (uFlowerOn > 0.5) {
+    vec2 fuv = (s - uFlowerRect.xy) / uFlowerRect.zw;
+    if (fuv.x > 0.0 && fuv.x < 1.0 && fuv.y > 0.0 && fuv.y < 1.0) {
+      vec4 fl = texture2D(uFlower, fuv);
+      float stain = texture2D(uFlower, fuv, 3.5).a;
+      col *= 1.0 - 0.07 * stain * (1.0 - fl.a);
+      col = mix(col, col * mix(vec3(1.0), fl.rgb / max(fl.a, 0.01), 0.92), fl.a * 0.92);
+    }
+  }
+
+  // ---- Light: a soft key from above, the bow and the curl, every dent each key left ----
+  float hgt = tooth * 0.55 + (mid - 0.5) * 0.5 + laidRib * 0.18 + fib * 0.25 - soft.a * strength * 1.6;
+  vec2 grad = vec2(dFdx(hgt), dFdy(hgt)) * uPxPerPt;
+  vec3 N = normalize(vNormal + vec3(-grad, 0.0) * 0.14);
+  vec3 KEY = normalize(vec3(-0.35, 0.55, 1.0));
+  float lit = dot(N, KEY) / KEY.z;
+  float day = mix(1.0, lit, 0.9);
+  vec2 scr = gl_FragCoord.xy / uView;
+  float vig = 1.0 - (0.11 * smoothstep(0.5, 1.0, scr.y) + 0.05 * smoothstep(0.3, 0.0, scr.y) + 0.06 * smoothstep(0.55, 1.0, abs(scr.x - 0.5) * 2.0)) * (1.0 - uFlat);
+  day *= vig * (1.0 - 0.1 * vCurl);
+  vec3 Lv = uLampPos - vWorld; float d = length(Lv);
+  float fall = 1.0 / (1.0 + d * d / (uLampReach * uLampReach));
+  vec2 away = vWorld.xy - uLampPos.xy;
+  float beam = smoothstep(-0.25, 0.65, away.y / max(length(away), 0.001));
+  float lambert = max(dot(N, Lv / max(d, 0.001)), 0.0);
+  vec3 lamp = vec3(1.0, 0.83, 0.6) * (0.035 + 1.45 * fall * mix(0.3, 1.0, beam) * (0.3 + 0.7 * lambert));
+  vec3 light = mix(vec3(day), lamp, uLamp);
+  // The rod and the guide shade the page just below them.
+  float below = (uRodY - uRodR) - vWorld.y;
+  float rodShade = (1.0 - smoothstep(0.0, 10.0, below)) * step(-1.0, below) * 0.2;
+  vec2 pd = (vWorld.xy - vec2(uCaretX, uRodY - 12.0)) / vec2(52.0, 16.0);
+  float pillShade = (1.0 - smoothstep(0.25, 1.0, length(pd))) * 0.22;
+  light *= 1.0 - (rodShade + pillShade) * (1.0 - uFlat) * (1.0 - 0.6 * uLamp);
+  col *= light;
+  col += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+  gl_FragColor = vec4(col * alpha, alpha);
+}`;
+const hex3 = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
+
+async function initGL() {
+  try {
+    THREE = await import("./vendor/three/three.module.min.js");
+  } catch (e) { return null; }
+  const glCanvas = document.createElement("canvas");
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, alpha: true, powerPreference: "high-performance" });
+  } catch (e) { return null; }
+  stage.appendChild(glCanvas);
+  renderer.setClearColor(0x161514, 1);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(30, 1, 1, 10000);
+
+  // A soft studio for the metal to reflect: light above, dark below.
+  const envCanvas = document.createElement("canvas"); envCanvas.width = 256; envCanvas.height = 128;
+  const eg = envCanvas.getContext("2d"), envGrad = eg.createLinearGradient(0, 0, 0, 128);
+  envGrad.addColorStop(0, "#f4f1ea"); envGrad.addColorStop(0.42, "#b9b6b0"); envGrad.addColorStop(0.5, "#ffffff"); envGrad.addColorStop(0.58, "#6d6a66"); envGrad.addColorStop(1, "#141312");
+  eg.fillStyle = envGrad; eg.fillRect(0, 0, 256, 128);
+  const envTex = new THREE.CanvasTexture(envCanvas); envTex.mapping = THREE.EquirectangularReflectionMapping; envTex.colorSpace = THREE.SRGBColorSpace;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromEquirectangular(envTex).texture;
+  envTex.dispose(); pmrem.dispose();
+
+  // The page.
+  const uniforms = {
+    uPaperW: { value: PAPER_W }, uPaperH: { value: 600 }, uWinTop: { value: 0 }, uWinH: { value: 600 }, uTopY: { value: 0 },
+    uBow: { value: BOW }, uCurl: { value: CURL }, uFlat: { value: 0 }, uSeedX: { value: 0 }, uSeedY: { value: 0 },
+    uPaperCol: { value: new THREE.Vector3() }, uInkCol: { value: new THREE.Vector3() },
+    uGrain: { value: 1 }, uAge: { value: 0.6 }, uLaid: { value: 1 }, uFibre: { value: 1 },
+    uInk: { value: null }, uInkTop: { value: 0 }, uInkH: { value: 1 },
+    uFlower: { value: null }, uFlowerRect: { value: new THREE.Vector4(0, 0, 1, 1) }, uFlowerOn: { value: 0 },
+    uLamp: { value: 0 }, uLampPos: { value: new THREE.Vector3() }, uLampReach: { value: 120 },
+    uPxPerPt: { value: 1 }, uView: { value: new THREE.Vector2(1, 1) },
+    uRodY: { value: ROD_Y }, uRodR: { value: ROD_R }, uCaretX: { value: 0 },
+  };
+  const paperMat = new THREE.ShaderMaterial({ uniforms, vertexShader: PAPER_VS, fragmentShader: PAPER_FS, extensions: { derivatives: true },
+    transparent: true, premultipliedAlpha: true, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor });
+  const paper = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 48, 220), paperMat);
+  paper.frustumCulled = false; scene.add(paper);
+
+  // The rod, its end caps, the type guide with its three lamps, and the pointer.
+  const steel = new THREE.MeshStandardMaterial({ color: 0x5d6168, metalness: 0.92, roughness: 0.3 });
+  const black = new THREE.MeshStandardMaterial({ color: 0x141414, metalness: 0.4, roughness: 0.5 });
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(ROD_R, ROD_R, 1, 40, 1, true), steel);
+  rod.rotation.z = Math.PI / 2; scene.add(rod);
+  const capGeo = new THREE.CylinderGeometry(ROD_R + 2.2, ROD_R + 2.2, 15, 40);
+  const capL = new THREE.Mesh(capGeo, black), capR = new THREE.Mesh(capGeo, black);
+  capL.rotation.z = capR.rotation.z = Math.PI / 2; scene.add(capL, capR);
+  const guide = new THREE.Group(); scene.add(guide);
+  const pillMat = new THREE.MeshStandardMaterial({ color: 0xF1EDE4, roughness: 0.42, metalness: 0 });
+  const pill = new THREE.Mesh(new THREE.CapsuleGeometry(PILL_R, PILL_LEN - PILL_R * 2, 12, 40), pillMat);
+  pill.rotation.z = Math.PI / 2; pill.scale.set(1, 1, 0.82); pill.position.set(0, 0, 4); guide.add(pill);
+  const dotGeo = new THREE.SphereGeometry(2.3, 20, 12);
+  const statusMat = new THREE.MeshStandardMaterial({ color: 0x3fae5a, emissive: 0x3fae5a, emissiveIntensity: 0.35, roughness: 0.3 });
+  const dots = [statusMat, new THREE.MeshStandardMaterial({ color: 0x1b1918, roughness: 0.35 }), new THREE.MeshStandardMaterial({ color: 0x8e3a30, roughness: 0.35 })]
+    .map((m, i) => { const d = new THREE.Mesh(dotGeo, m); d.position.set((i - 1) * 9 - 2, -0.5, 4 + PILL_R * 0.82 - 0.9); d.scale.set(1, 1, 0.5); guide.add(d); return d; });
+  const pointerMat = new THREE.MeshStandardMaterial({ color: 0x3b3936, metalness: 0.55, roughness: 0.38 });
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(8.5, 1.7, 1.7), pointerMat);
+  const stem = new THREE.Mesh(new THREE.BoxGeometry(1.7, 15, 1.7), pointerMat);
+  bar.position.set(0, -ROD_Y - 7, 1); stem.position.set(0, -ROD_Y - 14.5, 1);   // relative to the guide, which sits on the rod
+  guide.add(bar, stem);
+
+  const ambient = new THREE.HemisphereLight(0xfffdf8, 0x3a3631, 1.1);
+  const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(-0.35, 0.8, 1);
+  const lampLight = new THREE.PointLight(0xffd3a0, 0, 220, 0);
+  scene.add(ambient, key, lampLight);
+
+  // Ink lives in a tall texture covering the part of the sheet near the screen; typing patches a band.
+  const INK = { canvas: null, g: null, tex: null, S: 1, top: -1e9, h: 0, band: null, bandG: null, bandTex: null, sig: "" };
+  function setupInk() {
+    const maxTex = Math.min(renderer.capabilities.maxTextureSize, 4096);
+    const S = Math.max(1.8, Math.min(3.4, zoom * DPR * 0.62));
+    const w = Math.ceil(PAPER_W * S);
+    if (INK.canvas && INK.canvas.width === w && INK.canvas.height === maxTex) return;
+    if (INK.tex) INK.tex.dispose();
+    INK.canvas = document.createElement("canvas"); INK.canvas.width = w; INK.canvas.height = maxTex;
+    INK.g = INK.canvas.getContext("2d"); INK.S = w / PAPER_W; INK.h = maxTex / INK.S; INK.top = -1e9;
+    INK.tex = new THREE.CanvasTexture(INK.canvas);
+    INK.tex.flipY = false; INK.tex.generateMipmaps = true; INK.tex.minFilter = THREE.LinearMipmapLinearFilter; INK.tex.magFilter = THREE.LinearFilter;
+    INK.tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); INK.tex.colorSpace = THREE.NoColorSpace;
+    INK.band = document.createElement("canvas"); INK.band.width = w; INK.band.height = 8; INK.bandG = INK.band.getContext("2d");
+    INK.bandTex = new THREE.CanvasTexture(INK.band); INK.bandTex.flipY = false;
+    uniforms.uInk.value = INK.tex; uniforms.uInkH.value = INK.h;
+  }
+  function inkSig() { return [sheet.id, sheet.face, typist.chars.length, typist.layout.lines.length].join("|"); }
+  function redrawInk(centre) {
+    INK.top = Math.floor(centre - INK.h / 2);
+    const g = INK.g;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, INK.canvas.width, INK.canvas.height);
+    g.setTransform(INK.S, 0, 0, INK.S, 0, -INK.top * INK.S);
+    drawInk(g, sheet, typist.layout, INK.top, INK.h);
+    INK.tex.needsUpdate = true; INK.sig = inkSig();
+    uniforms.uInkTop.value = INK.top;
+  }
+  // Re-ink only the lines a keystroke touched, and copy that band into the texture.
+  function patchInk(fromLine, toLine) {
+    const tm = topMargin(sheet);
+    const bandTop = tm + fromLine * LH - 20, bandBottom = tm + toLine * LH + 8;
+    if (INK.top === -1e9 || bandTop < INK.top || bandBottom > INK.top + INK.h || toLine - fromLine > 8) return false;
+    const y0 = Math.max(0, Math.floor((bandTop - INK.top) * INK.S)), y1 = Math.min(INK.canvas.height, Math.ceil((bandBottom - INK.top) * INK.S));
+    if (y1 - y0 < 2) return true;
+    const top = INK.top + y0 / INK.S, h = (y1 - y0) / INK.S;
+    const L = { lines: typist.layout.lines.slice(0) };
+    // Draw into the band, clipped to it, then keep the big canvas in step.
+    INK.band.height = y1 - y0;
+    const bg = INK.bandG; bg.setTransform(INK.S, 0, 0, INK.S, 0, -(INK.top * INK.S + y0));
+    drawInk(bg, sheet, L, top, h);
+    const g = INK.g; g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.beginPath(); g.rect(0, y0, INK.canvas.width, y1 - y0); g.clip();
+    g.clearRect(0, y0, INK.canvas.width, y1 - y0); g.setTransform(INK.S, 0, 0, INK.S, 0, -INK.top * INK.S);
+    drawInk(g, sheet, L, top, h); g.restore();
+    try { renderer.copyTextureToTexture(new THREE.Vector2(0, y0), INK.bandTex, INK.tex); }
+    catch (e) { INK.tex.needsUpdate = true; }
+    INK.sig = inkSig();
+    return true;
+  }
+
+  // The flower: drawn once per sheet into its own small texture.
+  const FL = { canvas: document.createElement("canvas"), tex: null, sig: "" };
+  FL.canvas.width = FL.canvas.height = 384;
+  FL.tex = new THREE.CanvasTexture(FL.canvas); FL.tex.flipY = false; FL.tex.colorSpace = THREE.NoColorSpace;
+  FL.tex.generateMipmaps = true; FL.tex.minFilter = THREE.LinearMipmapLinearFilter;
+  uniforms.uFlower.value = FL.tex;
+  const FLOWER_BOX = 132;
+  function updateFlower() {
+    const sig = sheet.flower + ":" + sheet.seed;
+    if (sig === FL.sig) return;
+    FL.sig = sig;
+    const g = FL.canvas.getContext("2d"), k = FL.canvas.width / FLOWER_BOX;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, FL.canvas.width, FL.canvas.height);
+    if (sheet.flower !== "none") {
+      const r = splitmix(BigInt(sheet.seed) ^ 0xF10EF10En);
+      g.setTransform(k, 0, 0, k, 0, 0);
+      drawFlower(g, sheet.flower, FLOWER_BOX / 2, FLOWER_BOX / 2, 104, -24 + r.sym(10), sheet.seed);
+    }
+    FL.tex.needsUpdate = true;
+    uniforms.uFlowerOn.value = sheet.flower === "none" ? 0 : 1;
+    uniforms.uFlowerRect.value.set(PAPER_W - 70 - FLOWER_BOX / 2, 66 - FLOWER_BOX / 2, FLOWER_BOX, FLOWER_BOX);
+  }
+  function applyStyle() {
+    const paperDef = byId(PAPERS, sheet.paper), ink = byId(INKS, sheet.ink);
+    uniforms.uPaperCol.value.set(...hex3(paperDef.color));
+    uniforms.uInkCol.value.set(...hex3(ink.color));
+    uniforms.uGrain.value = paperDef.grain; uniforms.uAge.value = paperDef.age; uniforms.uLaid.value = paperDef.laid; uniforms.uFibre.value = paperDef.fibre;
+    uniforms.uSeedX.value = (sheet.seed % 997) * 7.31; uniforms.uSeedY.value = (sheet.seed % 991) * 3.17;
+    updateFlower();
+  }
+
+  let rodSpan = 0;
+  function resizeGL() {
+    renderer.setPixelRatio(DPR); renderer.setSize(W, H, false);
+    camera.aspect = W / H;
+    setupInk();
+  }
+  function renderGL() {
+    applyStyle();
+    const sy = spring.sy.v, topY = topMargin(sheet) + spring.y.v;
+    const fov = camera.fov * Math.PI / 180, dist = (H / 2) / zoom / Math.tan(fov / 2);
+    camera.position.set(0, (sy - H / 2) / zoom, dist); camera.near = dist * 0.3; camera.far = dist * 3; camera.updateProjectionMatrix();
+    // The part of the sheet on screen, in sheet points.
+    const viewTop = topY - sy / zoom, viewBottom = topY + (H - sy) / zoom;
+    // On screen the page always runs past the bottom of the window, as it does in the machine; downloads keep the page size.
+    const paperH = Math.max(sheetHeight(sheet, typist.layout), viewBottom + 160);
+    uniforms.uPaperH.value = paperH; uniforms.uTopY.value = topY;
+    uniforms.uWinTop.value = viewTop - 90; uniforms.uWinH.value = (viewBottom - viewTop) + 180;
+    if (INK.sig !== inkSig() || viewTop - 30 < INK.top || viewBottom + 30 > INK.top + INK.h) redrawInk((viewTop + viewBottom) / 2);
+    uniforms.uPxPerPt.value = zoom * DPR; uniforms.uView.value.set(W * DPR, H * DPR);
+    const cx = spring.x.v - PAPER_W / 2, camY = camera.position.y;
+    uniforms.uCaretX.value = cx;
+    // Rod across the whole window, capped at both ends; parts in front are placed so they line up with the type.
+    const zRod = 14, kRod = (dist - zRod) / dist, half = W / 2 / zoom * kRod;
+    if (Math.abs(half - rodSpan) > 0.5) { rodSpan = half; rod.scale.set(1, half * 2 + 30, 1); }
+    const rodY = camY + (ROD_Y - camY) * kRod;
+    rod.position.set(0, rodY, zRod); capL.position.set(-half + 7, rodY, zRod); capR.position.set(half - 7, rodY, zRod);
+    const zGuide = zRod + ROD_R * 0.4, kGuide = (dist - zGuide) / (dist - paperDepth(cx));
+    guide.position.set(cx * kGuide, camY + (ROD_Y - camY) * kGuide, zGuide);
+    // The left lamp on the guide: green, then amber, then red once the bell has rung.
+    const col = typist.layout.col, near = col >= BELL_COL ? 1 : col >= BELL_COL - 6 ? 0.5 : 0;
+    statusMat.color.set(near === 1 ? 0xd2493a : near === 0.5 ? 0xe0a032 : 0x3fae5a); statusMat.emissive.copy(statusMat.color);
+    const lamp = spring.lamp.v;
+    uniforms.uLamp.value = lamp;
+    uniforms.uLampPos.value.set(cx, -8, 34);
+    ambient.intensity = 1.1 * (1 - lamp * 0.85); key.intensity = 2.2 * (1 - lamp * 0.9);
+    lampLight.position.set(cx * kGuide, camY + (-6 - camY) * kGuide, 40); lampLight.intensity = 2.6 * lamp;
+    steel.envMapIntensity = 1 - lamp * 0.75; black.envMapIntensity = 1 - lamp * 0.75; pillMat.envMapIntensity = 0.45 * (1 - lamp * 0.7);
+    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
+    renderer.setClearColor(0x161514, 1);
+    renderer.render(scene, camera);
+  }
+  // Downloads go through the same shader, flat and evenly lit, a band at a time.
+  function exportGL(L, paperH, scale) {
+    const outW = Math.round(PAPER_W * scale), outH = Math.round(paperH * scale);
+    const out = document.createElement("canvas"); out.width = outW; out.height = outH;
+    const og = out.getContext("2d");
+    const band = Math.min(2048, renderer.capabilities.maxTextureSize);
+    const ec = document.createElement("canvas"); ec.width = outW; ec.height = band + 64;
+    const eg2 = ec.getContext("2d");
+    const etex = new THREE.CanvasTexture(ec);
+    etex.flipY = false; etex.generateMipmaps = true; etex.minFilter = THREE.LinearMipmapLinearFilter; etex.colorSpace = THREE.NoColorSpace;
+    const cam = new THREE.OrthographicCamera(-PAPER_W / 2, PAPER_W / 2, 0, -1, -200, 200);
+    const keep = {}; for (const k of ["uFlat", "uInk", "uInkTop", "uInkH", "uWinTop", "uWinH", "uTopY", "uPaperH", "uLamp", "uPxPerPt"]) keep[k] = uniforms[k].value;
+    const keepView = uniforms.uView.value.clone();
+    const hidden = [rod, capL, capR, guide];
+    hidden.forEach(o => { o.visible = false; });
+    renderer.setPixelRatio(1); renderer.setClearColor(0x000000, 0);
+    try {
+      for (let y0 = 0; y0 < outH; y0 += band) {
+        const bh = Math.min(band, outH - y0);
+        renderer.setSize(outW, bh, false);
+        const sTop = y0 / scale, sBot = (y0 + bh) / scale, inkTop = sTop - 16;
+        eg2.setTransform(1, 0, 0, 1, 0, 0); eg2.clearRect(0, 0, ec.width, ec.height);
+        eg2.setTransform(scale, 0, 0, scale, 0, -inkTop * scale);
+        drawInk(eg2, sheet, L, inkTop, ec.height / scale);
+        etex.needsUpdate = true;
+        Object.assign(uniforms.uFlat, { value: 1 }); uniforms.uInk.value = etex; uniforms.uInkTop.value = inkTop; uniforms.uInkH.value = ec.height / scale;
+        uniforms.uTopY.value = 0; uniforms.uWinTop.value = sTop - 2; uniforms.uWinH.value = (sBot - sTop) + 4; uniforms.uPaperH.value = paperH;
+        uniforms.uLamp.value = 0; uniforms.uPxPerPt.value = scale; uniforms.uView.value.set(outW, bh);
+        cam.top = -sTop; cam.bottom = -sBot; cam.updateProjectionMatrix();
+        renderer.render(scene, cam);
+        og.drawImage(renderer.domElement, 0, y0);
+      }
+    } finally {
+      for (const k in keep) uniforms[k].value = keep[k];
+      uniforms.uView.value.copy(keepView);
+      hidden.forEach(o => { o.visible = true; });
+      etex.dispose();
+      renderer.setPixelRatio(DPR); renderer.setSize(W, H, false); renderer.setClearColor(0x161514, 1);
+      renderGL();
+    }
+    return out;
+  }
+  return { renderer, render: renderGL, resize: resizeGL, patchInk, redrawAll: () => { INK.sig = ""; }, exportPng: exportGL };
+}
+
+// ---------- Without WebGL: the same layout, drawn flat in 2D ----------
+let canvas2d = null, ctx2d = null;
+function resize2D() {
+  if (!canvas2d) { canvas2d = document.createElement("canvas"); stage.appendChild(canvas2d); ctx2d = canvas2d.getContext("2d"); }
+  canvas2d.width = Math.round(W * DPR); canvas2d.height = Math.round(H * DPR);
+}
+function draw2D() {
+  const g = ctx2d, sy = spring.sy.v;
+  g.setTransform(DPR, 0, 0, DPR, 0, 0); g.fillStyle = "#161514"; g.fillRect(0, 0, W, H);
+  g.save(); g.translate(W / 2, sy); g.scale(zoom, zoom);
+  const ox = -PAPER_W / 2, oy = -topMargin(sheet) - spring.y.v, viewTop = -sy / zoom;
+  g.translate(0, viewTop);
+  drawSheet(g, sheet, typist.layout, ox, oy - viewTop, null, W / zoom, H / zoom, true);
+  g.restore();
+  const z = zoom, ry = sy - ROD_Y * z, cx = W / 2 + (spring.x.v - PAPER_W / 2) * z;
+  g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(0, ry + ROD_R * z, W, 4 * z);
+  g.fillStyle = "#5d6168"; g.fillRect(0, ry - ROD_R * z, W, ROD_R * 2 * z);
+  g.fillStyle = "#9a9da3"; g.fillRect(0, ry - ROD_R * z, W, 2 * z);
+  g.fillStyle = "#141414"; g.fillRect(0, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z); g.fillRect(W - 14 * z, ry - (ROD_R + 2) * z, 14 * z, (ROD_R + 2) * 2 * z);
+  g.fillStyle = "#F1EDE4"; g.beginPath(); g.roundRect(cx - PILL_LEN / 2 * z, ry - PILL_R * z, PILL_LEN * z, PILL_R * 2 * z, PILL_R * z); g.fill();
+  const col = typist.layout.col;
+  ["#3fae5a", "#1b1918", "#8e3a30"].forEach((c, i) => {
+    g.fillStyle = i === 0 ? (col >= BELL_COL ? "#d2493a" : col >= BELL_COL - 6 ? "#e0a032" : c) : c;
+    g.beginPath(); g.arc(cx + ((i - 1) * 9 - 2) * z, ry, 2.3 * z, 0, Math.PI * 2); g.fill();
+  });
+  g.fillStyle = "#3b3936"; g.fillRect(cx - 4.25 * z, sy + 6 * z, 8.5 * z, 1.7 * z); g.fillRect(cx - 0.85 * z, sy + 7 * z, 1.7 * z, 15 * z);
+}
+
+// ---------- Typing ----------
+function strike(input) {
+  if (!input) return;
+  unlockAudio();
+  const before = typist.layout.line;
+  after(typist.type(input), before);
+}
+function takeBack() { unlockAudio(); const before = typist.layout.line; after(typist.backspace(), before); }
+function after(events, beforeLine) {
+  feedback(events);
+  if (!events.length || (events.length === 1 && events[0] === "jammed")) return;
+  const isReturn = events.includes("return");
+  if (isReturn) setFeel(["x", "y"], 0.42, 0.86); else setFeel(["x", "y"], 0.1, 0.95);
+  review = 0; coast = null;
+  sheet.text = typist.text; sheet.updated = Date.now(); persist();
+  if (GL) GL.patchInk(Math.max(0, Math.min(beforeLine, typist.layout.line) - 1), Math.max(beforeLine, typist.layout.line) + 1);
+  retarget(); kick(); updateMeta();
+}
+// The hidden field always holds two spaces, so Backspace has something to delete on phone keyboards.
+const SENTINEL = "  ";
+function resetKeys() { keys.value = SENTINEL; keys.setSelectionRange(SENTINEL.length, SENTINEL.length); }
+let composing = false;
+keys.addEventListener("compositionstart", () => { composing = true; });
+keys.addEventListener("compositionend", e => { composing = false; if (e.data) strike(e.data); resetKeys(); });
+keys.addEventListener("beforeinput", e => {
+  if (composing || e.isComposing) return;
+  const t = e.inputType;
+  if (t === "insertText" || t === "insertReplacementText") { e.preventDefault(); strike(e.data || (e.dataTransfer && e.dataTransfer.getData("text/plain")) || ""); }
+  else if (t === "insertLineBreak" || t === "insertParagraph") { e.preventDefault(); strike("\n"); }
+  else if (t === "insertFromPaste" || t === "insertFromDrop") { e.preventDefault(); strike((e.dataTransfer && e.dataTransfer.getData("text/plain")) || e.data || ""); }
+  else if (t && t.startsWith("delete")) { e.preventDefault(); takeBack(); }
+});
+keys.addEventListener("input", () => {
+  if (composing) return;
+  const v = keys.value;
+  if (v.length > SENTINEL.length && v.startsWith(SENTINEL)) strike(v.slice(SENTINEL.length));
+  else if (v.length < SENTINEL.length) takeBack();
+  resetKeys();
+});
+keys.addEventListener("paste", e => {
+  const text = e.clipboardData && e.clipboardData.getData("text/plain");
+  if (text) { e.preventDefault(); strike(text); }
+});
+keys.addEventListener("keydown", e => {
+  if (e.key === "Escape") { e.preventDefault(); setTyping(false); }
+  else if (e.key === "Tab") { e.preventDefault(); strike("\t"); }
+  else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); setTyping(false); openPanel("savePanel", $("#saveKey")); }
+});
+keys.addEventListener("blur", () => { if (typing && !panelOpen()) setTyping(false); });
+
+function setTyping(on) {
+  if (on === typing && (!on || document.activeElement === keys)) return;
+  typing = on; coast = null;
+  document.body.classList.toggle("typing", on);
+  $("#doneKey").hidden = !on || finePointer(); forgetHudBoxes();
+  if (on) {
+    unlockAudio(); resetKeys(); review = 0;
+    setFeel(["x", "y"], 0.42, 0.9); retarget();
+    keys.style.top = Math.round(spring.sy.to) + "px";          // on the strike line, so a phone won't scroll to find it
+    keys.focus({ preventScroll: true });
+  } else {
+    if (document.activeElement === keys) keys.blur();
+    setFeel(["x", "y"], 0.42, 0.9); retarget();
+  }
+  kick(); updateMeta();
+}
+
+// ---------- Reading back: drag the page, flick it, it coasts and settles ----------
+let drag = null, swallowTap = false;
+function rubber(over, dim) { return (1 - 1 / (over * 0.55 / dim + 1)) * dim; }
+function pushSample(list, e) { list.push({ t: e.timeStamp, y: e.clientY }); while (list.length > 2 && e.timeStamp - list[0].t > 100) list.shift(); }
+function velocityOf(list, now) {
+  if (list.length < 2) return 0;
+  const a = list[0], b = list[list.length - 1];
+  if (now - b.t > 60) return 0;                          // the finger stopped before it lifted
+  const dt = (b.t - a.t) / 1000;
+  return dt > 0 ? (b.y - a.y) / dt : 0;
+}
+stage.addEventListener("pointerdown", e => {
+  if (e.button !== 0) return;
+  if (e.pointerType === "mouse") e.preventDefault();
+  const moving = coast || Math.abs(spring.y.vel) > 40;
+  coast = null;
+  const start = typist.layout.line * LH - spring.y.v;      // catch the page where it is right now
+  if (moving) { review = start; spring.y.to = spring.y.v; spring.y.vel = 0; }
+  drag = { id: e.pointerId, y: e.clientY, start, moved: false, caught: moving || swallowTap, wasTyping: typing, samples: [{ t: e.timeStamp, y: e.clientY }] };
+  swallowTap = false;
+  stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener("pointermove", e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dy = e.clientY - drag.y;
+  if (!drag.moved && Math.abs(dy) > 6) drag.moved = true;
+  pushSample(drag.samples, e);
+  if (!drag.moved) return;
+  const raw = drag.start + dy / zoom, lim = reviewLimit(), dim = H / zoom;
+  review = raw < 0 ? -rubber(-raw, dim) : raw > lim ? lim + rubber(raw - lim, dim) : raw;
+  spring.y.to = spring.y.v = typist.layout.line * LH - review; spring.y.vel = 0;
+  kick();
+});
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag; drag = null;
+  if (!d.moved) { if (!d.caught) setTyping(!d.wasTyping); return; }
+  const v = velocityOf(d.samples, e.timeStamp) / zoom, lim = reviewLimit();
+  if (review < 0 || review > lim) {
+    review = Math.min(Math.max(review, 0), lim);
+    spring.y.to = typist.layout.line * LH - review; spring.y.vel = -v; setFeel(["y"], 0.42, 1);
+  } else if (Math.abs(v) > 30 && !reduceMotion) {
+    coast = { v };
+  } else { spring.y.to = spring.y.v; }
+  kick();
+}
+stage.addEventListener("pointerup", endDrag);
+stage.addEventListener("pointercancel", endDrag);
+stage.addEventListener("wheel", e => {
+  e.preventDefault(); coast = null;
+  review = Math.min(Math.max(review - e.deltaY / zoom, 0), reviewLimit());
+  setFeel(["y"], 0.14, 1); retarget(); kick();
+}, { passive: false });
+function scrollBy(points) {
+  coast = null;
+  review = Math.min(Math.max(review + points, 0), reviewLimit());
+  setFeel(["y"], 0.38, 1); retarget(); kick();
+}
+document.addEventListener("keydown", e => {
+  if (typing || panelOpen()) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); openPanel("savePanel", $("#saveKey")); return; }
+  if (e.altKey && e.code === "KeyN") { e.preventDefault(); feedNew(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const onControl = e.target.closest && e.target.closest("button, a, input, [role=radio]");
+  if (onControl && (e.key === " " || e.key === "Enter")) return;
+  const page = (H / zoom) * 0.7;
+  const reading = { ArrowUp: 3 * LH, ArrowDown: -3 * LH, PageUp: page, PageDown: -page, Home: 1e9, End: -1e9 };
+  if (e.key in reading) { e.preventDefault(); scrollBy(reading[e.key]); return; }
+  if (e.key.length === 1 || e.key === "Enter") { e.preventDefault(); setTyping(true); strike(e.key === "Enter" ? "\n" : e.key); }
+});
+
+// ---------- Sheets ----------
+function openSheet(s, isNew, skipSave) {
+  clearTimeout(saveTimer);
+  if (!skipSave && sheet.text.trim()) persist(true);
+  sheet = s; typist = new Typist(sheet.text); review = 0; coast = null;
+  store.set("tw.current", sheet.id);
+  retarget(true);
+  if (isNew) {
+    unlockAudio(); play("feed");
+    if (!reduceMotion) { spring.y.v -= 420; setFeel(["y"], 0.62, 0.9); }   // the new sheet rolls up into the machine
+  }
+  if (GL) GL.redrawAll();
+  kick(); updateMeta();
+}
+function feedNew() {
+  persist(true);
+  openSheet(newSheet(), true);
+  setTyping(true);
+}
+function sheetName(s) { return (s.text.split("\n").find(l => l.trim()) || "").trim() || "New sheet"; }
+const wordCount = t => t.split(/\s+/).filter(Boolean).length;
+function thousands(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, "'"); }
+function updateMeta() {
+  const n = typist.chars.length;
+  const count = $("#count"), label = `${thousands(n)} / ${thousands(MAX_CHARS)}`;
+  if (count.textContent.length !== label.length) forgetHudBoxes();
+  count.textContent = label;
+  document.title = sheet.text.trim() ? `${sheetName(sheet)} · TypeWrite` : "TypeWrite by Jericho";
+  stage.setAttribute("aria-label", sheet.text ? "Your sheet: " + sheet.text.slice(0, 2000) : "A blank sheet in a typewriter");
+  placeGhost();
+}
+
+// ---------- Panels: springs that can be caught, dragged and flicked away ----------
+const scrim = $("#scrim");
+const isPhone = () => matchMedia("(max-width: 719px)").matches;
+const panels = new Map();
+let current = null;
+function panelState(id) {
+  let st = panels.get(id);
+  if (!st) { st = { id, el: document.getElementById(id), v: 0, vel: 0, to: 0, running: false, opener: null, phone: false, h: 0, dragging: null }; panels.set(id, st); bindSheetDrag(st); }
+  return st;
+}
+function panelOpen() { return !!current; }
+function setInert(on) { [hud, stage, $("#dock"), keys, ghost].forEach(el => { el.inert = on; }); }
+function setExpanded(st, on) { document.querySelectorAll(`[aria-controls="${st.id}"]`).forEach(b => b.setAttribute("aria-expanded", String(on))); }
+const RENDER = { sheetsPanel: renderSheets, savePanel: renderSave, paperPanel: renderPickers, inkPanel: renderPickers, facePanel: renderPickers, flowerPanel: renderPickers };
+function openPanel(id, opener) {
+  if (typing) setTyping(false);
+  if (current && current.id === id) { closePanel(); return; }
+  if (current) closePanel(true);
+  const st = panelState(id);
+  st.opener = opener || null; st.phone = isPhone();
+  if (RENDER[id]) RENDER[id]();
+  st.el.hidden = false;
+  placePanel(st);
+  st.to = 1; current = st; setExpanded(st, true);
+  if (st.phone) { scrim.classList.add("on"); setInert(true); st.el.setAttribute("aria-modal", "true"); } else st.el.setAttribute("aria-modal", "false");
+  st.el.focus({ preventScroll: true });
+  runPanel(st);
+}
+function closePanel(quick) {
+  const st = current; if (!st) return;
+  current = null; st.to = 0; setExpanded(st, false);
+  scrim.classList.remove("on"); setInert(false);
+  if (!quick && st.opener && document.contains(st.opener)) st.opener.focus({ preventScroll: true });
+  runPanel(st);
+}
+function placePanel(st) {
+  const el = st.el;
+  if (st.phone) { el.style.left = el.style.right = el.style.top = el.style.bottom = el.style.maxHeight = ""; el.style.transformOrigin = ""; st.h = el.offsetHeight; return; }
+  const r = st.opener ? st.opener.getBoundingClientRect() : null;
+  const w = el.offsetWidth, cx = r ? r.left + r.width / 2 : W / 2;
+  const left = clamp(cx - w / 2, 12, W - w - 12);
+  el.style.left = left + "px"; el.style.right = "auto";
+  if (r && r.top < H / 2) {                                   // anchored at the top: open downwards
+    el.style.top = (r.bottom + 8) + "px"; el.style.bottom = "auto"; el.style.maxHeight = (H - r.bottom - 24) + "px";
+    el.style.transformOrigin = `${cx - left}px 0`; st.down = true;
+  } else {
+    const top = r ? r.top : H - 90;
+    el.style.bottom = (H - top + 10) + "px"; el.style.top = "auto"; el.style.maxHeight = (top - 24) + "px";
+    el.style.transformOrigin = `${cx - left}px 100%`; st.down = false;
+  }
+}
+function runPanel(st) {
+  if (st.running) return;
+  st.running = true;
+  let last = performance.now();
+  const tick = t => {
+    const dt = clamp((t - last) / 1000, 0, 0.05); last = Math.max(last, t);
+    if (!st.dragging) {
+      const opening = st.to === 1;
+      const resp = reduceMotion ? 0.2 : opening ? (st.phone ? 0.44 : 0.32) : (st.phone ? 0.34 : 0.22);
+      const damp = reduceMotion ? 1 : opening ? (st.phone ? 0.86 : 0.88) : 1;
+      const n = Math.max(1, Math.ceil(dt * 240)), h = dt / n;
+      for (let i = 0; i < n; i++) stepSpring(st, h, resp, damp);
+    }
+    renderPanel(st);
+    if (!st.dragging && Math.abs(st.v - st.to) < 0.001 && Math.abs(st.vel) < 0.01) {
+      st.v = st.to; st.vel = 0; renderPanel(st); st.running = false;
+      if (st.to === 0) st.el.hidden = true;
+      return;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function renderPanel(st) {
+  const p = st.v, el = st.el;
+  if (st.phone) {
+    const h = st.h || el.offsetHeight;
+    el.style.transform = reduceMotion ? "none" : `translate3d(0, ${(1 - p) * h}px, 0)`;
+    el.style.opacity = reduceMotion ? String(clamp(p, 0, 1)) : "1";
+  } else {
+    const q = clamp(p, 0, 1.06);
+    el.style.opacity = String(clamp(p, 0, 1));
+    el.style.transform = reduceMotion ? "none" : `translate3d(0, ${(1 - q) * (st.down ? -8 : 8)}px, 0) scale(${0.96 + 0.04 * q})`;
+  }
+  let dim = 0;
+  for (const s of panels.values()) if (s.phone && !s.el.hidden) dim = Math.max(dim, clamp(s.v, 0, 1));
+  scrim.style.opacity = String(dim * 0.38);
+  scrim.style.visibility = dim > 0.001 ? "visible" : "hidden";
+}
+function bindSheetDrag(st) {
+  const zone = st.el.querySelector(".drag");
+  zone.addEventListener("pointerdown", e => {
+    if (!st.phone || st.to !== 1 || e.button !== 0 || e.target.closest("button")) return;
+    st.h = st.el.offsetHeight;
+    st.dragging = { y: e.clientY, start: st.v, samples: [{ t: e.timeStamp, y: e.clientY }] };
+    zone.setPointerCapture(e.pointerId); runPanel(st);
+  });
+  zone.addEventListener("pointermove", e => {
+    const d = st.dragging; if (!d) return;
+    let off = (1 - d.start) * st.h + (e.clientY - d.y);
+    if (off < 0) off = -rubber(-off, st.h);
+    st.v = 1 - off / st.h; st.vel = 0; pushSample(d.samples, e);
+  });
+  const end = e => {
+    const d = st.dragging; if (!d) return; st.dragging = null;
+    const v = velocityOf(d.samples, e.timeStamp), off = (1 - st.v) * st.h;
+    st.vel = -v / st.h;                                    // the finger's speed carries on into the spring
+    if (off + project(v) > st.h * 0.5 && v > -100) closePanel(); else { st.to = 1; runPanel(st); }
+  };
+  zone.addEventListener("pointerup", end); zone.addEventListener("pointercancel", end);
+}
+scrim.addEventListener("click", () => closePanel());
+document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => closePanel()));
+document.addEventListener("keydown", e => { if (e.key === "Escape" && panelOpen()) { e.preventDefault(); closePanel(); } });
+// A click outside a popover closes it, without also starting the machine.
+document.addEventListener("pointerdown", e => {
+  if (!current || current.phone) return;
+  if (current.el.contains(e.target) || e.target.closest(`[aria-controls="${current.id}"]`)) return;
+  if (stage.contains(e.target)) swallowTap = true;
+  closePanel(true);
+}, true);
+
+function toast(text, action) {
+  const t = $("#toast"), b = $("#toastAction");
+  $("#toastText").textContent = text;
+  if (action) { b.hidden = false; b.textContent = action.label; b.onclick = () => { hideToast(); action.run(); }; } else b.hidden = true;
+  t.classList.toggle("has-action", !!action); t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(hideToast, action ? 5000 : 2200);
+}
+function hideToast() { $("#toast").classList.remove("show"); }
+
+// ---------- Pickers: paper, ribbon, typeface, flower ----------
+function tileCanvas(w, h, paint) {
+  const k = Math.min(window.devicePixelRatio || 1, 3), c = document.createElement("canvas");
+  c.width = Math.round(w * k); c.height = Math.round(h * k);
+  const g = c.getContext("2d"); g.scale(k, k); paint(g); return c;
+}
+function paperFill(g, w, h, paperDef) {
+  g.fillStyle = paperDef.color; g.fillRect(0, 0, w, h);
+  if (grainTile) {
+    const pat = g.createPattern(grainTile, "repeat"); pat.setTransform(new DOMMatrix().scale(0.5));
+    g.save(); g.globalCompositeOperation = "multiply"; g.globalAlpha = Math.min(1, paperDef.grain * 0.8); g.fillStyle = pat; g.fillRect(0, 0, w, h); g.restore();
+  }
+}
+function radioGroup(container, items, key, build) {
+  const hadFocus = container.contains(document.activeElement);
+  container.innerHTML = "";
+  for (const item of items) {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("role", "radio");
+    const on = sheet[key] === item.id;
+    b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1;
+    build(b, item);
+    b.addEventListener("click", () => choose(key, item.id));
+    container.appendChild(b);
+  }
+  if (hadFocus) { const sel = container.querySelector('[aria-checked="true"]'); if (sel) sel.focus({ preventScroll: true }); }
+}
+function renderPickers() {
+  const paperDef = byId(PAPERS, sheet.paper), ink = byId(INKS, sheet.ink);
+  radioGroup($("#paperChips"), PAPERS, "paper", (b, p) => {
+    b.className = "chip";
+    const c = tileCanvas(40, 40, g => { g.beginPath(); g.arc(20, 20, 20, 0, Math.PI * 2); g.clip(); paperFill(g, 40, 40, p); });
+    c.className = "dot"; b.append(c, document.createTextNode(p.name));
+  });
+  radioGroup($("#inkChips"), INKS, "ink", (b, k) => {
+    b.className = "chip";
+    const c = tileCanvas(40, 40, g => { g.beginPath(); g.arc(20, 20, 20, 0, Math.PI * 2); g.clip(); paperFill(g, 40, 40, paperDef); g.fillStyle = k.color; g.beginPath(); g.arc(20, 20, 11, 0, Math.PI * 2); g.fill(); });
+    c.className = "dot"; b.append(c, document.createTextNode(k.name));
+  });
+  radioGroup($("#faceTiles"), FACES, "face", (b, f) => {
+    b.className = "tile";
+    b.append(tileCanvas(150, 64, g => { paperFill(g, 150, 64, paperDef); g.fillStyle = ink.color; g.font = `30px "${f.family}"`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("Aa Qq", 75, 34); }),
+             document.createTextNode(f.name));
+  });
+  radioGroup($("#flowerTiles"), FLOWERS, "flower", (b, f) => {
+    b.className = "tile"; b.setAttribute("aria-label", f.name);
+    b.append(tileCanvas(100, 64, g => { paperFill(g, 100, 64, paperDef); if (f.id !== "none") drawFlower(g, f.id, 50, 32, 58, -16, sheet.seed); }), document.createTextNode(f.name));
+  });
+}
+function choose(key, value) {
+  unlockAudio(); playKey();
+  sheet[key] = value;
+  const d = store.get("tw.defaults", {}); d[key] = value; store.set("tw.defaults", d);
+  if (sheet.text.trim()) persist(true);
+  if (GL && key === "face") GL.redrawAll();
+  renderPickers(); retarget(); kick(); placeGhost();
+}
+// Arrow keys move through a radio group and choose, like native radio buttons.
+document.addEventListener("keydown", e => {
+  const group = e.target.closest && e.target.closest('[role="radiogroup"]');
+  if (!group || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+  e.preventDefault();
+  const radios = [...group.querySelectorAll('[role="radio"]')], i = radios.indexOf(e.target.closest('[role="radio"]'));
+  const step = e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1;
+  radios[(i + step + radios.length) % radios.length].click();
+});
+
+// ---------- Your sheets ----------
+let lastThrown = null;
+function fmtWhen(ts) { return new Date(ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); }
+function renderSheets() {
+  const list = $("#sheetList"); list.innerHTML = "";
+  const all = [sheet, ...sheets.filter(s => s.id !== sheet.id)].filter(s => s.text.trim() || s.id === sheet.id);
+  for (const s of all) {
+    const li = document.createElement("li"), isCurrent = s.id === sheet.id;
+    li.className = "sheet-row"; li.setAttribute("aria-current", String(isCurrent));
+    const open = document.createElement("button"); open.type = "button"; open.className = "sheet-open";
+    const thumb = document.createElement("canvas"), k = Math.min(window.devicePixelRatio || 1, 3);
+    thumb.width = Math.round(44 * k); thumb.height = Math.round(57 * k);
+    const g = thumb.getContext("2d"), sc = 44 * k / PAPER_W; g.scale(sc, sc);
+    drawSheet(g, s, layoutChars(graphemes(s.text.slice(0, 1400))), 0, 0, 57 * k / sc, PAPER_W, 57 * k / sc, false);
+    const words = wordCount(s.text), info = document.createElement("span");
+    const name = document.createElement("span"); name.className = "sheet-name"; name.textContent = s.text.trim() ? sheetName(s) : "Blank sheet";
+    const sub = document.createElement("span"); sub.className = "sheet-sub";
+    sub.textContent = `${isCurrent ? "In the machine" : fmtWhen(s.updated)} · ${words === 1 ? "1 word" : words + " words"}`;
+    info.append(name, sub); open.append(thumb, info);
+    open.addEventListener("click", () => { if (!isCurrent) openSheet(s, false); closePanel(); });
+    li.appendChild(open);
+    if (s.text.trim()) {
+      const del = document.createElement("button"); del.type = "button"; del.className = "trash"; del.setAttribute("aria-label", "Throw away " + sheetName(s)); del.title = "Throw away";
+      del.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+      del.addEventListener("click", () => throwAway(s));
+      li.appendChild(del);
+    }
+    list.appendChild(li);
+  }
+}
+function throwAway(s) {
+  const wasCurrent = s.id === sheet.id, idx = sheets.findIndex(x => x.id === s.id);
+  sheets = sheets.filter(x => x.id !== s.id); store.set("tw.sheets", sheets);
+  lastThrown = { s, idx, wasCurrent };
+  if (wasCurrent) openSheet(newSheet(), false, true);
+  renderSheets();
+  toast("Sheet thrown away.", { label: "Undo", run: undoThrow });
+}
+function undoThrow() {
+  const t = lastThrown; if (!t) return; lastThrown = null;
+  sheets.splice(clamp(t.idx, 0, sheets.length), 0, t.s); store.set("tw.sheets", sheets);
+  if (t.wasCurrent) openSheet(t.s, false, true);
+  if (current && current.id === "sheetsPanel") renderSheets();
+}
+
+// ---------- Downloads ----------
+function renderSave() {
+  const blank = !sheet.text.trim();
+  $("#savePng").disabled = blank; $("#saveTxt").disabled = blank;
+  $("#saveNote").textContent = blank ? "Type something first, then come back to download it." : "The picture is the sheet exactly as it looks here: paper, ink and flower.";
+}
+function fileBase() {
+  const first = (sheet.text.split("\n").find(l => l.trim()) || "sheet").trim().slice(0, 40).replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase();
+  return "typewrite-" + (first || "sheet");
+}
+function saveBlob(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function exportPng() {
+  const L = layoutChars(typist.chars), h = sheetHeight(sheet, L), scale = Math.min(3, 14000 / h);
+  let c;
+  if (GL) c = GL.exportPng(L, h, scale);
+  else {
+    c = document.createElement("canvas"); c.width = Math.round(PAPER_W * scale); c.height = Math.round(h * scale);
+    const g = c.getContext("2d"); g.scale(scale, scale); drawSheet(g, sheet, L, 0, 0, h, PAPER_W, h, false);
+  }
+  c.toBlob(b => { if (b) { saveBlob(b, fileBase() + ".png"); toast("Saved the picture."); } else toast("Couldn't make the picture. Try the words instead."); }, "image/png");
+}
+function exportTxt() {
+  saveBlob(new Blob([sheet.text.replace(/\s+$/, "") + "\n"], { type: "text/plain;charset=utf-8" }), fileBase() + ".txt");
+  toast("Saved the words.");
+}
+
+// ---------- Wiring ----------
+$("#doneKey").addEventListener("click", () => setTyping(false));
+$("#newKey").addEventListener("click", feedNew);
+$("#sheetsKey").addEventListener("click", e => openPanel("sheetsPanel", e.currentTarget));
+$("#saveKey").addEventListener("click", e => openPanel("savePanel", e.currentTarget));
+$("#paperKey").addEventListener("click", e => openPanel("paperPanel", e.currentTarget));
+$("#inkKey").addEventListener("click", e => openPanel("inkPanel", e.currentTarget));
+$("#faceKey").addEventListener("click", e => openPanel("facePanel", e.currentTarget));
+$("#flowerKey").addEventListener("click", e => openPanel("flowerPanel", e.currentTarget));
+$("#phoneRow").addEventListener("click", () => openPanel("phonePanel", $("#sheetsKey")));
+$("#savePng").addEventListener("click", () => { closePanel(); exportPng(); });
+$("#saveTxt").addEventListener("click", () => { closePanel(); exportTxt(); });
+$("#copyCmd").addEventListener("click", async e => {
+  const btn = e.currentTarget, text = $("#cmdText").textContent;
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; toast("Copied. Paste it into Terminal on your Mac."); }
+  catch (err) { const r = document.createRange(); r.selectNodeContents($("#cmdText")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Selected. Press Cmd+C to copy."); }
+  setTimeout(() => { btn.textContent = "Copy"; }, 1600);
+});
+const soundKey = $("#soundKey"), soundToggle = $("#soundToggle"), buzzToggle = $("#buzzToggle"), lampKey = $("#lampKey");
+function setSound(on) { soundOn = on; store.set("tw.sound", on); soundKey.setAttribute("aria-pressed", String(on)); soundToggle.checked = on; if (on) { unlockAudio(); playKey(); } }
+soundKey.addEventListener("click", () => setSound(!soundOn));
+soundToggle.addEventListener("change", () => setSound(soundToggle.checked));
+buzzToggle.addEventListener("change", () => { buzzOn = buzzToggle.checked; store.set("tw.buzz", buzzOn); });
+function setLamp(on) {
+  lampOn = on; store.set("tw.lamp", on); lampKey.setAttribute("aria-pressed", String(on));
+  document.body.classList.toggle("lamp", on); retarget(); kick();
+}
+lampKey.addEventListener("click", () => { unlockAudio(); play("backspace"); setLamp(!lampOn); });
+soundKey.setAttribute("aria-pressed", String(soundOn)); soundToggle.checked = soundOn; buzzToggle.checked = buzzOn;
+lampKey.setAttribute("aria-pressed", String(lampOn)); document.body.classList.toggle("lamp", lampOn);
+window.addEventListener("resize", () => { resize(); if (current) placePanel(current); });
+if (window.visualViewport) visualViewport.addEventListener("resize", () => { retarget(); if (typing) keys.style.top = Math.round(spring.sy.to) + "px"; kick(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) persist(true); });
+window.addEventListener("pagehide", () => persist(true));
+
+// Start once the typefaces are in, so the first letters land in the right face.
+(async () => {
+  grainTile = makeGrain();
+  try { await Promise.all([document.fonts.load('17px "Courier Prime"'), document.fonts.load('16px "Special Elite"')]); } catch (e) {}
+  GL = await initGL();
+  resize(); updateMeta();
+  window.__tw = { get typist() { return typist; }, get sheet() { return sheet; }, get gl() { return !!GL; }, get busy() { return running; }, spring, strike, takeBack, setTyping, exportPng, exportTxt, layoutChars, graphemes, setLamp, openPanel };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+.DS_Store
+.build/
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.taste-skill/
+.impeccable/review/
