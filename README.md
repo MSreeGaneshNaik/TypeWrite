@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Branding/AppIcon-1024.png" width="128" height="128" alt="TypeWrite app icon: the Jericho petal mark in ink black on cream old paper">
+  <img src="Branding/JerichoTile.png" width="140" height="140" alt="TypeWrite app icon: the Jericho petal mark in ink black on a rounded cream old-paper tile">
 </p>
 
 <h1 align="center">TypeWrite <sub>by Jericho</sub></h1>

@@ -27,9 +27,10 @@ colors:
   ink-worn: "#5A4636"
   guide-cream: "#F1EDE4"
   rod-steel: "#5D6168"
-  lamp-ready: "#3FAE5A"
-  lamp-near: "#E0A032"
-  lamp-bell: "#D2493A"
+  platen-rubber: "#121110"
+  lamp-key: "#3DFF7A"
+  lamp-space: "#FFC23D"
+  lamp-delete: "#FF4438"
 typography:
   wordmark:
     fontFamily: "Special Elite, system-ui, sans-serif"
@@ -118,7 +119,7 @@ The paper takes 80% of the window's width at every size. Type scales with it, so
 
 **Key Characteristics:**
 - The page and the machine are the screen. The chrome is small, light and floats over the page.
-- The paper stays put sideways and the guide moves (the reel's model). The strike line stays at 60% of the visible height.
+- The paper stays put sideways and the guide moves (the reel's model). The strike line sits just above the dock, between 50% and 76% of the visible height.
 - Everything on the page is seeded per sheet, so a letter or a fox spot never changes once it exists.
 - The desk lamp is the one dramatic moment: the room goes dark and the guide throws warm light up the page.
 
@@ -131,7 +132,8 @@ The desk is a neutral near-black. The chrome is a near-neutral light grey that n
 - **Text tiers** (#23211E / #55504A / #6A645B): primary, secondary and meta. Each is at least 4.5:1 on the surface.
 - **Primary** (#23211E): the one filled action in a panel ("Picture of the sheet"), switches when on, the pressed desk lamp, and the toast.
 - **Focus** (#A06A1C): focus rings only.
-- **Alarm** (#B23A2C): throwing a sheet away. The guide's left lamp has its own signal: green while there's room, amber six columns before the bell, red once the bell has rung.
+- **Alarm** (#B23A2C): throwing a sheet away.
+- **Radium lamps** (#3DFF7A / #FFC23D / #FF4438): the guide's three lamps are signals, not chrome. They glow faintly at rest and flare with a halo when they fire: green on every key and Return, amber on space, red on delete.
 - **Papers and ribbons** are data, not chrome. They are used only on the page and in the pickers.
 
 ## Typography
@@ -144,7 +146,7 @@ The desk is a neutral near-black. The chrome is a near-neutral light grey that n
 ## Layout
 
 - **Page:** 358 × 463 pt (US letter proportions), 30 columns, side margin 26 pt, top margin 70 pt (138 pt with a pressed flower). On screen the paper always runs past the bottom of the window. The download keeps the page size.
-- **Strike line:** at 60% of the visual viewport height, so it moves above a phone keyboard. Rod centre 42 pt below the baseline. Guide capsule 82 × 27 pt. The T pointer sits 7 pt under the baseline.
+- **Strike line:** placed from the bottom of the visual viewport so the guide clears the dock (`strikeLine()`: the guide's depth plus 104 px above the bottom, held between 50% and 76% of the height). It moves above a phone keyboard. Rod centre 42 pt below the baseline. Guide capsule 82 × 27 pt with the three lamps set straight into its face, 10.5 pt apart. The T pointer sits 7 pt under the baseline.
 - **HUD:** 60 px high, 10 px side inset, 44 px targets. Each side picks its colour from what is behind it (page or desk).
 - **Dock:** centred, 18 px above the safe area. It slides away while typing.
 - **Panels:** popovers anchored to their button on screens 720 px and wider; full-width bottom sheets with a grabber below that.
@@ -153,6 +155,7 @@ The desk is a neutral near-black. The chrome is a near-neutral light grey that n
 
 Depth is physical, not decorative:
 - **The page:** a perspective camera (30° FOV, positioned so the plane z = 0 maps exactly at the zoom). The sheet bows 9 pt and its top edge curls 44 pt away, which gives the reel's arched top edge and darker sides.
+- **Platen:** 24 pt below the baseline the sheet wraps over a rubber roller (radius 44 pt). Lines that roll over it darken as they turn away from the light.
 - **Light:** a soft key light from above-left on the bump of the paper tooth and the key dents, plus a screen vignette at the top and sides. The rod and guide cast a band of shade on the page.
 - **Desk lamp:** ambient and key light drop to about 10%, and a warm point at the guide lights a pool and an upward beam.
 - **Floating chrome:** the dock, popovers, sheets and toast carry a real shadow because they float. Nothing resting has one.
@@ -177,15 +180,15 @@ Depth is physical, not decorative:
   - About 28% of strikes are "off their feet", printing lighter on one side.
   - 5% have clogged counters, and 1.8% leave a faint double strike.
   - The ribbon wears slowly across the sheet, and punctuation strikes hard.
-- **Ink texture:** a window of the sheet up to 4,096 px tall around the view. Typing re-inks only the touched lines with `copyTextureToTexture`. The window recentres when the view leaves it.
+- **Ink texture:** a window of the sheet up to 4,096 px tall around the view. Typing re-inks only the touched lines with a direct `texSubImage2D` band upload. The window recentres when the view leaves it.
 - **Dock:** new sheet, typeface, pressed flower, paper, ribbon | desk lamp, key sounds. Icon-only with names on hover and for screen readers.
 - **Panels:** springs (opening response 0.32 to 0.44 s, damping 0.86 to 0.88; closing critically damped). Phone sheets drag from the grabber, rubber-band upwards, and dismiss on projected travel past half their height. The scrim follows the drag.
-- **Reading back:** drag with rubber-banding past either end. On release the page coasts with UIScrollView's 0.998/ms deceleration, and a spring takes over at the ends with the coast's speed. Wheel, arrows, Page Up/Down, Home and End also scroll.
+- **Reading back:** drag with rubber-banding past either end. On release the page coasts with UIScrollView's 0.998/ms deceleration, and a spring takes over at the ends with the coast's speed. Wheel, arrows, Page Up/Down, Home and End also scroll. Rolling by hand gives a ratchet click (and a haptic tap) for every line that passes the strike line.
 - **Download:** the same shader renders flat and evenly lit in 2,048 px bands, as a PNG with a transparent outside edge.
 
 ## Do's and Don'ts
 
-- **Do** keep the paper at 80% of the window width and the strike line at 60% of the visible height.
+- **Do** keep the paper at 80% of the window width and the strike line just above the dock.
 - **Do** seed anything that appears on the page from the sheet's seed and the character index.
 - **Do** keep chrome light and floating. Its colour follows what is behind it.
 - **Don't** use the typewriter faces for controls. They are for the page and the wordmark.
