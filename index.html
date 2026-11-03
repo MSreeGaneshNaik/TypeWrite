@@ -1129,7 +1129,7 @@ async function initGL() {
   scene.add(ambient, key, lampLight);
 
   // Ink lives in a tall texture covering the part of the sheet near the screen; typing patches a band.
-  const INK = { canvas: null, g: null, tex: null, S: 1, top: -1e9, h: 0, band: null, bandG: null, bandTex: null, sig: "", dirty: true };
+  const INK = { canvas: null, g: null, tex: null, S: 1, top: -1e9, h: 0, band: null, bandG: null, sig: "", dirty: true };
   function setupInk() {
     const maxTex = Math.min(renderer.capabilities.maxTextureSize, 4096);
     const S = Math.max(1.8, Math.min(3.4, zoom * DPR * 0.62));
@@ -1142,7 +1142,6 @@ async function initGL() {
     INK.tex.flipY = false; INK.tex.generateMipmaps = true; INK.tex.minFilter = THREE.LinearMipmapLinearFilter; INK.tex.magFilter = THREE.LinearFilter;
     INK.tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); INK.tex.colorSpace = THREE.NoColorSpace;
     INK.band = document.createElement("canvas"); INK.band.width = w; INK.band.height = 8; INK.bandG = INK.band.getContext("2d");
-    INK.bandTex = new THREE.CanvasTexture(INK.band); INK.bandTex.flipY = false;
     uniforms.uInk.value = INK.tex; uniforms.uInkH.value = INK.h;
   }
   function inkSig() { return [sheet.id, sheet.face, topMargin(sheet), typist.chars.length, typist.layout.lines.length].join("|"); }
@@ -1171,8 +1170,19 @@ async function initGL() {
     const g = INK.g; g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.beginPath(); g.rect(0, y0, INK.canvas.width, y1 - y0); g.clip();
     g.clearRect(0, y0, INK.canvas.width, y1 - y0); g.setTransform(INK.S, 0, 0, INK.S, 0, -INK.top * INK.S);
     drawInk(g, sheet, L, top, h); g.restore();
-    try { renderer.copyTextureToTexture(new THREE.Vector2(0, y0), INK.bandTex, INK.tex); }
-    catch (e) { INK.tex.needsUpdate = true; }
+    // If the texture is still waiting for its full upload, that upload already carries this band.
+    const props = renderer.properties.get(INK.tex);
+    if (props.__webglTexture && props.__version === INK.tex.version) {
+      const gl = renderer.getContext();
+      renderer.state.bindTexture(gl.TEXTURE_2D, props.__webglTexture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, y0, gl.RGBA, gl.UNSIGNED_BYTE, INK.band);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      renderer.state.unbindTexture();
+    }
     INK.sig = inkSig();
     return true;
   }
