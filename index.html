@@ -2129,10 +2129,6 @@ async function initGL() {
   const capGeo = new THREE.CylinderGeometry(ROD_R + 2.2, ROD_R + 2.2, 15, 40);
   const capL = new THREE.Mesh(capGeo, black), capR = new THREE.Mesh(capGeo, black);
   capL.rotation.z = capR.rotation.z = Math.PI / 2; scene.add(capL, capR);
-  // The platen: the rubber roller the sheet wraps round, just behind the rod.
-  const rubber = new THREE.MeshStandardMaterial({ color: 0x4A5236, roughness: 0.78, metalness: 0 });
-  const platen = new THREE.Mesh(new THREE.CylinderGeometry(PLATEN_R - 0.6, PLATEN_R - 0.6, 1, 72, 1, true), rubber);
-  platen.rotation.z = Math.PI / 2; scene.add(platen);
 
   const guide = new THREE.Group(); scene.add(guide);
   // Glossy ivory enamel.
@@ -2294,7 +2290,6 @@ async function initGL() {
     rod.position.set(0, rodY, zRod); capL.position.set(-half + 7, rodY, zRod); capR.position.set(half - 7, rodY, zRod);
     const zGuide = zRod + ROD_R * 0.4, kGuide = (dist - zGuide) / (dist - paperDepth(cx));
     guide.position.set(cx * kGuide, camY + (ROD_Y - camY) * kGuide, zGuide);
-    platen.scale.set(1, half * 2 + 60, 1); platen.position.set(0, BEND_Y, -(PLATEN_R + BOW + 0.6));   // behind the sheet's bowed edges too
     // The lamps glow faintly like radium paint, and flare when their key is struck.
     lamps.forEach((l, i) => {
       const g = lampGlow[i];
@@ -2308,7 +2303,7 @@ async function initGL() {
     ambient.intensity = 1.1 * (1 - lamp * 0.85); key.intensity = 2.2 * (1 - lamp * 0.9);
     lampLight.position.set(cx * kGuide, camY + (-6 - camY) * kGuide, 40); lampLight.intensity = 2.6 * lamp;
     steel.envMapIntensity = 1 - lamp * 0.75; black.envMapIntensity = 1 - lamp * 0.75; pillMat.envMapIntensity = 0.6 * (1 - lamp * 0.7);
-    rubber.envMapIntensity = 0.22 * (1 - lamp * 0.8);    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
+    pointerMat.emissive.setRGB(0.9 * lamp, 0.55 * lamp, 0.2 * lamp); pointerMat.emissiveIntensity = 0.35;
     renderer.render(scene, camera);
   }
   // Downloads go through the same shader, flat and evenly lit, a band at a time.
@@ -2324,7 +2319,7 @@ async function initGL() {
     const cam = new THREE.OrthographicCamera(-PAPER_W / 2, PAPER_W / 2, 0, -1, -200, 200);
     const keep = {}; for (const k of ["uFlat", "uInk", "uInkTop", "uInkH", "uWinTop", "uWinH", "uTopY", "uPaperH", "uLamp", "uPxPerPt"]) keep[k] = uniforms[k].value;
     const keepView = uniforms.uView.value.clone();
-    const hidden = [rod, capL, capR, guide, platen];
+    const hidden = [rod, capL, capR, guide];
     hidden.forEach(o => { o.visible = false; });
     renderer.setPixelRatio(1); renderer.setClearColor(0x000000, 0);
     try {
