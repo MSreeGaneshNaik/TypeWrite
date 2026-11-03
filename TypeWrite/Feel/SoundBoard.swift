@@ -77,7 +77,7 @@ final class SoundBoard {
             nextKeyVoice = (nextKeyVoice + 1) % keyVoices.count
         }
 
-        let jitter: Float = sound == .bell ? 0.008 : 0.035
+        let jitter: Float = sound == .bell ? 0.008 : 0.02
         voice.speed.rate = 1 + Float.random(in: -jitter...jitter)
         voice.player.stop()
         voice.player.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)

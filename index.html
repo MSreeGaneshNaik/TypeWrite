@@ -315,6 +315,7 @@
     <p class="label">Your sheets</p>
     <ul class="sheet-list" id="sheetList"></ul>
     <p class="note">Sheets are kept in this browser only. Download any you want to keep.</p>
+    <p class="note">Typewriter sounds: Erik Pålsson, <a href="http://www.soundsofchanges.eu/sound/underwood-315-portable-typewriter" target="_blank" rel="noopener">Sounds of Changes</a> (CC BY 4.0), with CC0 recordings by knufds and others.</p>
     <div class="group">
       <p class="label">Machine</p>
       <label class="switch-row"><span>Key sounds</span><input class="switch" type="checkbox" role="switch" id="soundToggle" checked></label>
@@ -487,8 +488,8 @@ function sanitize(input) {
   return out;
 }
 function emptyLayout() { return { lines: [{ glyphs: [], ret: false }], line: 0, col: 0 }; }
-// Appends one character and reports how the carriage moved.
-function strikeInto(L, ch, index) {
+// Appends one character and reports how the carriage moved. index: its place in the text; id: the seed of its ink.
+function strikeInto(L, ch, index, id = index) {
   if (ch === "\n") {
     L.lines[L.lines.length - 1].ret = true; L.lines[L.lines.length - 1].end = index;   // end: the character a line break used up
     L.lines.push({ glyphs: [], ret: false }); L.line = L.lines.length - 1; L.col = 0;
@@ -502,43 +503,76 @@ function strikeInto(L, ch, index) {
     for (let i = g.length - 1; i >= 0; i--) if (g[i].ch === " ") { space = i; break; }
     let carried = [];
     if (space >= 0 && space < g.length - 1) carried = g.splice(space + 1);
-    L.lines.push({ glyphs: carried.map((x, c) => ({ ch: x.ch, index: x.index, col: c })), ret: false });
+    L.lines.push({ glyphs: carried.map((x, c) => ({ ch: x.ch, index: x.index, id: x.id, col: c })), ret: false });
     L.line = L.lines.length - 1; L.col = carried.length;
     move = "wrapped";
   }
-  L.lines[L.lines.length - 1].glyphs.push({ ch, index, col: L.col });
+  L.lines[L.lines.length - 1].glyphs.push({ ch, index, id, col: L.col });
   L.col += 1;
   return move;
 }
-function layoutChars(chars) { const L = emptyLayout(); chars.forEach((c, i) => strikeInto(L, c, i)); return L; }
+function layoutChars(chars, ids) { const L = emptyLayout(); chars.forEach((c, i) => strikeInto(L, c, i, ids ? ids[i] : i)); return L; }
+// Ink ids are stored as runs of consecutive numbers, so a sheet typed straight through stores nothing extra.
+function packIds(ids) {
+  const out = [];
+  for (let i = 0; i < ids.length;) { let j = i + 1; while (j < ids.length && ids[j] === ids[j - 1] + 1) j++; out.push(ids[i], j - i); i = j; }
+  return out.length === 2 && out[0] === 0 ? undefined : out;
+}
+function unpackIds(p, n) {
+  if (!Array.isArray(p)) return null;
+  const ids = [];
+  for (let k = 0; k + 1 < p.length && ids.length <= n; k += 2) for (let m = 0; m < p[k + 1]; m++) ids.push(p[k] + m);
+  return ids.length === n ? ids : null;
+}
+// Line and column of the gap before character b (b = the text's length: the carriage's own place).
+function posIn(L, b, n) {
+  if (b >= n) return [L.line, L.col];
+  for (let li = 0; li < L.lines.length; li++) {
+    const g = L.lines[li].glyphs;
+    if (g.length && b >= g[0].index && b <= g[g.length - 1].index) return [li, g[b - g[0].index].col];
+    if (L.lines[li].end === b) return [li, g.length];
+  }
+  return [L.line, L.col];
+}
 
 class Typist {
-  constructor(text) { this.chars = graphemes(sanitize(text || "")).slice(0, MAX_CHARS); this.layout = layoutChars(this.chars); }
+  constructor(text, packed) {
+    this.chars = graphemes(sanitize(text || "")).slice(0, MAX_CHARS);
+    this.ids = unpackIds(packed, this.chars.length) || this.chars.map((_, i) => i);
+    this.next = this.ids.reduce((m, v) => Math.max(m, v), -1) + 1;
+    this.caret = this.chars.length;
+    this.layout = layoutChars(this.chars, this.ids); this.cp = null;
+  }
   get text() { return this.chars.join(""); }
+  caretPos() { return this.cp || (this.cp = posIn(this.layout, this.caret, this.chars.length)); }
+  setCaret(b) { this.caret = Math.max(0, Math.min(b, this.chars.length)); this.cp = null; }
+  relayout() { this.layout = layoutChars(this.chars, this.ids); this.cp = null; }
+  // Types at the caret. At the end of the text the layout just grows; in the middle the text reflows.
   type(input) {
     const clean = graphemes(sanitize(input));
     if (!clean.length) return [];
     if (this.chars.length >= MAX_CHARS) return ["jammed"];
-    const accepted = clean.slice(0, MAX_CHARS - this.chars.length);
-    if (accepted.length > 1) {
-      for (const c of accepted) { strikeInto(this.layout, c, this.chars.length); this.chars.push(c); }
-      return ["key"];
-    }
-    const c = accepted[0], before = { line: this.layout.line, col: this.layout.col };
-    const move = strikeInto(this.layout, c, this.chars.length);
-    this.chars.push(c);
-    const events = [];
-    if (move === "returned" || move === "wrappedOnSpace") events.push("return");
-    else if (move === "wrapped") events.push("return", "key");
-    else events.push(c === " " ? "space" : "key");
-    if (this.layout.line === before.line && before.col < BELL_COL && this.layout.col >= BELL_COL) events.push("bell");
+    const accepted = clean.slice(0, MAX_CHARS - this.chars.length), ids = accepted.map(() => this.next++);
+    const before = this.caretPos();
+    if (this.caret === this.chars.length) {
+      accepted.forEach((c, k) => { strikeInto(this.layout, c, this.chars.length, ids[k]); this.chars.push(c); this.ids.push(ids[k]); });
+    } else { this.chars.splice(this.caret, 0, ...accepted); this.ids.splice(this.caret, 0, ...ids); }
+    this.setCaret(this.caret + accepted.length);
+    if (this.caret < this.chars.length) this.relayout();
+    if (accepted.length > 1) return ["key"];
+    const c = accepted[0], now = this.caretPos(), wrapped = now[0] > before[0];
+    const events = c === "\n" || (wrapped && c === " ") ? ["return"] : wrapped ? ["return", "key"] : [c === " " ? "space" : "key"];
+    if (!wrapped && before[1] < BELL_COL && now[1] >= BELL_COL) events.push("bell");
     return events;
   }
-  backspace() {
-    if (!this.chars.length) return ["jammed"];
-    this.chars.pop(); this.layout = layoutChars(this.chars);
-    return ["backspace"];
+  remove(a, b) {
+    if (b <= a) return;
+    this.chars.splice(a, b - a); this.ids.splice(a, b - a);
+    this.setCaret(this.caret > b ? this.caret - (b - a) : Math.min(this.caret, a));
+    this.relayout();
   }
+  backspace() { if (!this.caret) return ["jammed"]; this.remove(this.caret - 1, this.caret); return ["backspace"]; }
+  forwardDelete() { if (this.caret >= this.chars.length) return ["jammed"]; this.remove(this.caret, this.caret + 1); return ["backspace"]; }
 }
 
 // ---------- Storage (sheets live in this browser) ----------
@@ -577,7 +611,7 @@ let sheet = sheets.find(s => s.id === store.get("tw.current", "")) || null;
 let fresh = false;
 if (!sheet) { sheet = newSheet(); fresh = true; }
 useMetrics(sheet);
-let typist = new Typist(sheet.text);
+let typist = new Typist(sheet.text, sheet.ids);
 let saveTimer = 0;
 function persist(now) {
   clearTimeout(saveTimer);
@@ -614,19 +648,26 @@ function play(name, volume = 1, rate = 1) {
   if (!soundOn || !audio.ctx || !audio.buffers[name]) return;
   const src = audio.ctx.createBufferSource();
   src.buffer = audio.buffers[name];
-  const jitter = name === "bell" ? 0.008 : 0.035;
+  const jitter = name === "bell" ? 0.008 : 0.02;   // the four strikes already differ; keep each typebar's ring in tune
   src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * jitter);
   if (volume === 1) src.connect(audio.gain);
   else { const v = audio.ctx.createGain(); v.gain.value = volume; src.connect(v); v.connect(audio.gain); }
   src.start();
 }
-// The click of the platen's line ratchet: a small, bright key sound.
-function ratchet() { play("key3", 0.32, 1.9); buzz(3); }
+// The click of the platen's line ratchet: the detent click at the head of the paper-feed recording.
+function ratchet() {
+  if (soundOn && audio.ctx && audio.buffers.feed) {
+    const src = audio.ctx.createBufferSource(); src.buffer = audio.buffers.feed;
+    src.playbackRate.value = 1 + (Math.random() * 2 - 1) * 0.04;
+    src.connect(audio.gain); src.start(0, 0, 0.05);
+  }
+  buzz(3);
+}
 function playKey() {
   const keys = ["key1", "key2", "key3", "key4"];
   let pick = keys[Math.floor(Math.random() * 4)];
   if (pick === audio.lastKey) pick = keys[(keys.indexOf(pick) + 1) % 4];
-  audio.lastKey = pick; play(pick);
+  audio.lastKey = pick; play(pick, 0.85 + Math.random() * 0.15);   // fingers never strike twice alike
 }
 function buzz(ms) { if (buzzOn && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 function feedback(events) {
@@ -832,7 +873,7 @@ function drawSheet(g, s, L, ox, oy, paperH, viewW, viewH, shadow) {
     const base = oy + topMargin(s) + li * LH, shift = lineShift(s, L.lines[li]);
     for (const gl of L.lines[li].glyphs) {
       if (gl.ch === " ") continue;
-      const k = strikeFor(s.seed, gl.index), cx = left + (gl.col + 0.5 + shift) * ADV;
+      const k = strikeFor(s.seed, gl.id), cx = left + (gl.col + 0.5 + shift) * ADV;
       g.save(); g.translate(cx + k.dx, base + k.dy); g.rotate(k.rot);
       g.globalAlpha = k.bleed; g.fillText(gl.ch, 0.45, 0.2);
       g.globalAlpha = k.opacity; g.fillText(gl.ch, 0, 0);
@@ -900,7 +941,7 @@ function drawInk(g, s, L, top, h) {
   g.font = `${fs}px "${face.family}"`; g.textAlign = "center"; g.textBaseline = "alphabetic";
   for (let li = first; li <= last; li++) {
     const base = tm + li * LH, shift = lineShift(s, L.lines[li]);
-    for (const gl of L.lines[li].glyphs) if (gl.ch !== " ") inkGlyph(g, s.seed, gl.ch, gl.index, SIDE + (gl.col + 0.5 + shift) * ADV, base, fs, ADV);
+    for (const gl of L.lines[li].glyphs) if (gl.ch !== " ") inkGlyph(g, s.seed, gl.ch, gl.id, SIDE + (gl.col + 0.5 + shift) * ADV, base, fs, ADV);
   }
   const t = titleLayout(s, face);
   if (t && t.base + 20 > top && t.base - 40 < top + h) {
@@ -950,17 +991,20 @@ function toScreen(x, y) {
 }
 function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
 function setFeel(names, resp, damp) { for (const n of names) { spring[n].resp = resp; spring[n].damp = damp; } }
-function caretX() { const L = typist.layout; return SIDE + (Math.min(L.col, COLS) + 0.5 + lineShift(sheet, L.lines[L.line])) * ADV; }
+function caretLine() { return typist.caretPos()[0]; }
+function caretX() { const [li, col] = typist.caretPos(); return SIDE + (Math.min(col, COLS) + 0.5 + lineShift(sheet, typist.layout.lines[li])) * ADV; }
 function viewportH() { const vv = window.visualViewport; return vv ? vv.height + vv.offsetTop : innerHeight; }
 // The type line sits as low as the machine allows: room under it for the rod, the guide and the dock.
 function strikeLine() {
   const vh = viewportH(), below = (-ROD_Y + PILL_R) * zoom + 104;
   return Math.round(clamp(vh - below, vh * 0.5, vh * 0.76));
 }
-function reviewLimit() { return typist.layout.line * LH + topMargin(sheet); }
+// How far the page can roll from the caret's line: back to the top, or on to the last line.
+function reviewLimit() { return caretLine() * LH + topMargin(sheet); }
+function reviewMin() { return Math.min(0, (caretLine() - (typist.layout.lines.length - 1)) * LH); }
 function retarget(jump) {
   spring.x.to = caretX();
-  spring.y.to = typist.layout.line * LH - review;
+  spring.y.to = caretLine() * LH - review;
   spring.sy.to = strikeLine();
   spring.lamp.to = lampOn ? 1 : 0;
   if (jump) for (const k in spring) { spring[k].v = spring[k].to; spring[k].vel = 0; }
@@ -978,11 +1022,11 @@ function frame(t) {
   if (coast) {
     review += coast.v * dt; coast.v *= Math.pow(DECEL, dt * 1000);
     const lim = reviewLimit();
-    if (review < 0 || review > lim) {                     // ran into the end: hand the speed to a spring
-      review = Math.min(Math.max(review, 0), lim);
-      spring.y.to = typist.layout.line * LH - review; spring.y.vel = -coast.v; setFeel(["y"], 0.42, 1); coast = null;
+    if (review < reviewMin() || review > lim) {           // ran into the end: hand the speed to a spring
+      review = clamp(review, reviewMin(), lim);
+      spring.y.to = caretLine() * LH - review; spring.y.vel = -coast.v; setFeel(["y"], 0.42, 1); coast = null;
     } else {
-      spring.y.to = spring.y.v = typist.layout.line * LH - review; spring.y.vel = -coast.v;
+      spring.y.to = spring.y.v = caretLine() * LH - review; spring.y.vel = -coast.v;
       if (Math.abs(coast.v) < 4) { coast = null; spring.y.vel = 0; }
     }
   }
@@ -1210,6 +1254,9 @@ const hex3 = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) / 25
 
 // ---------- The view: a painted sky and land behind the machine, sunrise by day, moonlit with the lamp on ----------
 // painting(px, res): px from the top-left in device pixels. uRollerY: where the roller begins. uNight: 0 day, 1 night.
+// The painting's own notes on its stars and fireflies (matched by the live view below):
+// stars sit on two jittered grids (0.036 H and 0.018 H), denser toward the top; fireflies live from the
+// horizon + 0.03 H down to the roller, on 0.045 H cells, 13% occupied, warm (1, 0.8, 0.4) glow.
 const PAINT_GLSL = `
 #ifndef SSAA
 #define SSAA 1            // 1: 4x rotated-grid supersampling, 0: one sample per pixel
@@ -1223,6 +1270,38 @@ const PAINT_GLSL = `
 
 uniform float uRollerY;
 uniform float uNight;
+uniform float uLayer;
+
+// Layer selection. At run time uLayer picks the layer. Defining PAINT_LAYER (0, 1, 2,
+// or -1 for everything) compiles a variant with only that layer's code, which is
+// cheaper (three.js: material.defines = { PAINT_LAYER: 0 }).
+#if defined(PAINT_LAYER)
+#  define LAYER_ID float(PAINT_LAYER)
+#  if PAINT_LAYER == 0
+#    define HAS_PLATE 1
+#    define HAS_CLOUDS 0
+#    define HAS_FG 0
+#    define HAS_EXTRAS 0
+#  elif PAINT_LAYER == 1
+#    define HAS_PLATE 0
+#    define HAS_CLOUDS 1
+#    define HAS_FG 0
+#    define HAS_EXTRAS 0
+#  elif PAINT_LAYER == 2
+#    define HAS_PLATE 0
+#    define HAS_CLOUDS 0
+#    define HAS_FG 1
+#    define HAS_EXTRAS 0
+#  endif
+#else
+#  define LAYER_ID uLayer
+#endif
+#ifndef HAS_PLATE
+#  define HAS_PLATE 1
+#  define HAS_CLOUDS 1
+#  define HAS_FG 1
+#  define HAS_EXTRAS 1
+#endif
 
 // ---------------------------------------------------------------- palette ---
 const vec3 C_ZENITH  = vec3(0.749, 0.796, 0.796); // #BFCBCB
@@ -1294,6 +1373,7 @@ float gHalfW, gHor, gRoll;
 vec2  gSun, gSunDay, gMoon;
 vec4  gW;                         // keyframe weights: day, sunset, dusk, night
 float gSet, gNight, gMoonVis, gSunVis, gLightMix, gLightUp;
+bool  gAll;                       // uLayer < 0: everything in one image, stars and fireflies included
 vec3  gZen, gMidSky, gHorSky, gGlowC, gCoreC, gTwiC;
 float gGlowAmt, gTwiAmt, gBloomAmt, gCoreAmt;
 vec3  gCSh, gCMid, gCLit, gRim;
@@ -1308,6 +1388,7 @@ void setupScene(vec2 res) {
   gHalfW = 0.5 * res.x / H;
   gRoll = (uRollerY > 1.0 ? uRollerY : 0.7 * H) / H;
   gHor = gRoll - 0.22;
+  gAll = LAYER_ID < -0.5;
   float u = clamp(uNight, 0.0, 1.0);
   float ka = smoothstep(0.0, 0.35, u), kb = smoothstep(0.35, 0.62, u), kc = smoothstep(0.62, 1.0, u);
   gW = vec4(1.0 - ka, ka - kb, kb - kc, kc);
@@ -1381,11 +1462,11 @@ vec2 cloudMass(vec2 c) {
   vec2 m;
   float wv = smoothstep(0.2, 0.9, gHalfW);
   if (c.x < 0.0) {
-    m = blob(e, vec2(0.0 + 0.10 * wv, 0.19), vec2(0.15 + 0.22 * wv, 0.20), 0.34);
-    m = pickMax(m, blob(e, vec2(0.18 + 0.2 * wv, gHor - 0.07), vec2(0.16 + 0.12 * wv, 0.065), gHor - 0.03));
+    m = blob(e, vec2(0.0 + 0.10 * wv, 0.19), vec2(0.15 + 0.22 * wv, 0.20), min(0.34, gHor - 0.08));
+    m = pickMax(m, blob(e, vec2(0.18 + 0.2 * wv, gHor - 0.115), vec2(0.16 + 0.12 * wv, 0.06), gHor - 0.075));
   } else {
-    m = blob(e, vec2(0.01 + 0.11 * wv, 0.14), vec2(0.14 + 0.20 * wv, 0.16), 0.27);
-    m = pickMax(m, blob(e, vec2(0.06 + 0.08 * wv, gHor - 0.09), vec2(0.18 + 0.16 * wv, 0.07), gHor - 0.04));
+    m = blob(e, vec2(0.01 + 0.11 * wv, 0.14), vec2(0.14 + 0.20 * wv, 0.16), min(0.27, gHor - 0.10));
+    m = pickMax(m, blob(e, vec2(0.06 + 0.08 * wv, gHor - 0.13), vec2(0.18 + 0.16 * wv, 0.065), gHor - 0.085));
   }
   // keep a window around the (day) sun
   float ds = length((c - gSunDay) * vec2(1.0, 1.3));
@@ -1402,10 +1483,10 @@ bool nearCloud(vec2 p) {
   float d;
   if (p.x < 0.0) {
     d = min(length((e - vec2(0.10 * wv, 0.19)) / vec2(0.15 + 0.22 * wv + G, 0.20 + G)),
-            length((e - vec2(0.18 + 0.2 * wv, gHor - 0.07)) / vec2(0.16 + 0.12 * wv + G, 0.065 + G)));
+            length((e - vec2(0.18 + 0.2 * wv, gHor - 0.115)) / vec2(0.16 + 0.12 * wv + G, 0.06 + G)));
   } else {
     d = min(length((e - vec2(0.01 + 0.11 * wv, 0.14)) / vec2(0.14 + 0.20 * wv + G, 0.16 + G)),
-            length((e - vec2(0.06 + 0.08 * wv, gHor - 0.09)) / vec2(0.18 + 0.16 * wv + G, 0.07 + G)));
+            length((e - vec2(0.06 + 0.08 * wv, gHor - 0.13)) / vec2(0.18 + 0.16 * wv + G, 0.065 + G)));
   }
   return d < 1.0;
 }
@@ -1525,6 +1606,9 @@ vec4 clouds(vec2 p) {
   float soft = mix(0.004, 0.016, smoothstep(0.3, 1.0, sb));
   float a = smoothstep(-soft, soft, cov + (st2 - 0.5) * 0.012);
   a *= 1.0 - 0.3 * exp(-dSun * 3.0) * gSunVis * (1.0 - smoothstep(0.0, 0.025, cov));
+  // clouds dissolve into the horizon haze above the highest hills, so the cloud layer
+  // never needs to pass behind the land (and can drift sideways freely)
+  a *= smoothstep(gHor - 0.068, gHor - 0.10, p.y);
   return vec4(col, clamp(a, 0.0, 1.0));
 }
 
@@ -1559,7 +1643,8 @@ vec3 sky(vec2 p) {
     c = mix(c, mix(gCoreC, vec3(1.0, 0.96, 0.86), 0.5), rays * 0.30 * core * (1.0 - gSet * 0.5));
   }
 
-  if (gNight > 0.0) {
+#if HAS_EXTRAS
+  if (gAll && gNight > 0.0) {
     // painterly stars: soft dabs, denser toward the top
     float dens = mix(0.42, 0.04, smoothstep(0.0, gHor, p.y));
     for (int l = 0; l < 2; l++) {
@@ -1579,6 +1664,7 @@ vec3 sky(vec2 p) {
       }
     }
   }
+#endif
   if (gMoonVis > 0.0) {
     // a soft painted moon with a halo
     vec2 dm = p - gMoon;
@@ -1784,8 +1870,311 @@ vec4 land(vec2 p) {
   float dep = accD / max(acc.a, 1e-4);
   col = grade(col, mix(dep, 0.45, mist * 0.6));
 
-  if (gNight > 0.0 && p.y > yG) {
-    // a few warm fireflies drifting over the meadow
+  return vec4(col, acc.a);
+}
+
+// --------------------------------------------------------------- foreground --
+// big painted flowers and grass rooted below the roller, mostly in the strips
+// beside the paper (edge factor ef: 1 at the screen edges, 0 toward the centre)
+float edgeF(float x) {
+  float m = 0.2 * gHalfW;                       // paper margin
+  return 1.0 - smoothstep(0.6 * m, m + 0.14, gHalfW - abs(x));
+}
+
+// cheap atan2 (polynomial, ~1e-5 rad error)
+float fatan2(float y, float x) {
+  float ax = abs(x), ay = abs(y);
+  float a = min(ax, ay) / max(max(ax, ay), 1e-6);
+  float s = a * a;
+  float r = ((-0.0464964749 * s + 0.15931422) * s - 0.327622764) * s * a + a;
+  if (ay > ax) r = 1.57079637 - r;
+  if (x < 0.0) r = 3.14159274 - r;
+  return y < 0.0 ? -r : r;
+}
+
+// one bloom. kind: 0 daisy, 1 cosmos, 2 marigold, 3 sunflower. Returns colour, coverage;
+// rim gets the light-facing edge amount
+vec4 bloom(vec2 p, vec2 c, float R, float kind, float seed, float soft, vec2 Ld, inout float rim) {
+  vec2 d = p - c;
+  d = vec2(d.x, d.y / (0.70 + 0.26 * fract(seed * 7.13))) / R;   // tilted toward the viewer
+  float r = length(d);
+  if (r > 1.1 + soft) return vec4(0.0);
+  float a = fatan2(d.y, d.x) + seed * 6.2832;
+  float N, Re, Rc;
+  vec3 pc, cc;
+  N = kind < 0.5 ? 13.0 : (kind < 1.5 ? 8.0 : (kind < 2.5 ? 12.0 : 22.0));
+  float pa = a * N * 0.15915494;
+  float f = 1.0 - abs(fract(pa + 0.5) * 2.0 - 1.0);        // 1 on a petal's axis, 0 between
+  f = f * f * (3.0 - 2.0 * f);
+  if (kind < 0.5) {
+    Re = 0.52 + 0.48 * smoothstep(0.08, 0.7, f); Rc = 0.27;
+    pc = C_WHITE; cc = vec3(0.96, 0.72, 0.18);
+  } else if (kind < 1.5) {
+    Re = 0.46 + 0.54 * smoothstep(0.0, 0.55, f) - 0.10 * smoothstep(0.93, 1.0, f); Rc = 0.21;
+    pc = fract(seed * 3.7) < 0.5 ? C_YELLOW : C_ORANGE; cc = vec3(0.62, 0.32, 0.12);
+  } else if (kind < 2.5) {
+    Re = 0.80 + 0.20 * f; Rc = 0.10;
+    pc = mix(C_ORANGE, vec3(0.95, 0.66, 0.22), fract(seed * 5.3)); cc = vec3(0.70, 0.36, 0.10);
+  } else {
+    Re = 0.56 + 0.44 * f * f; Rc = 0.46;
+    pc = vec3(0.98, 0.76, 0.17); cc = vec3(0.32, 0.20, 0.09);
+  }
+  float m = smoothstep(Re + soft, Re - soft, r);
+  float pid = floor(pa + 0.5);
+  float pv = h11(pid + seed * 31.0);
+  vec3 col = pc * (0.80 + 0.24 * smoothstep(Rc, 1.0, r)) * (0.92 + 0.14 * pv);
+  col *= 1.0 - 0.08 * smoothstep(0.82, 1.0, f) * smoothstep(Rc + 0.1, 0.9, r);    // petal crease
+  if (kind > 1.5 && kind < 2.5) col *= 0.86 + 0.16 * smoothstep(0.3, 0.7, fract(r * 3.2 + pv * 0.4));
+  col *= 0.94 + 0.10 * clamp(-d.y, -1.0, 1.0);                                      // lit from above
+  // seed head
+  float mc = smoothstep(Rc + soft * 0.7, Rc - soft * 0.7, r);
+  vec3 ccol = cc * (0.78 + 0.34 * h12(floor(d * 13.0 + seed * 50.0)));
+  ccol = mix(ccol, ccol * 1.35, smoothstep(0.0, -Rc, d.y) * 0.6);
+  col = mix(col, ccol, mc);
+  rim = max(rim, smoothstep(Re - 0.35, Re, r) * max(0.0, dot(d / max(r, 1e-3), Ld)) * m);
+  return vec4(col, m);
+}
+
+// one layer of flowering plants: stem, a leaf and a bloom per cell
+void plants(vec2 p, float cs, float seed, vec2 Rr, vec2 Hh, float pmin, float soft,
+            float kindMax, bool stems, vec2 Ld, inout vec4 acc, inout float rim, inout float pet) {
+  float id0 = floor(p.x / cs);
+  float root = gRoll + 0.02;
+  for (int k = -1; k <= 1; k++) {
+    float id = id0 + float(k);
+    vec3 h = h32(vec2(id, seed));
+    float bx = (id + 0.5 + (h.x - 0.5) * 0.6) * cs;
+    float ef = edgeF(bx);
+    if (h.z > pmin + (0.9 - pmin) * ef) continue;
+    float R = mix(Rr.x, Rr.y, h.y) * (0.7 + 0.3 * ef);
+    float hgt = mix(Hh.x, Hh.y, fract(h.x * 3.7 + h.y * 1.3) * (0.35 + 0.65 * ef));
+    vec2 c = vec2(bx + (h.y - 0.5) * 0.35 * hgt, gRoll - hgt);
+    if (p.y < c.y - R * 1.2 || abs(p.x - (stems ? bx : c.x)) > (stems ? R * 2.6 + 0.2 * hgt : R * 1.25)) continue;
+    if (!stems && p.y > c.y + R * 1.2) continue;
+    float side = h.x < 0.5 ? -1.0 : 1.0;
+    // stem
+    float t = (root - p.y) / (root - c.y);
+    if (stems && t > 0.0 && t < 1.0) {
+      float sx = mix(bx, c.x, t) + R * 2.0 * t * (1.0 - t) * side;
+      float sw = max(0.0011, R * 0.075) * (1.15 - 0.3 * t);
+      float dx = p.x - sx;
+      float ms = smoothstep(sw + soft * R * 0.3, sw - soft * R * 0.3, abs(dx));
+      vec3 sc = mix(vec3(0.33, 0.42, 0.22), vec3(0.55, 0.62, 0.33), step(0.0, dx * Ld.x));
+      if (ms > 0.0) { acc = vec4(sc, 1.0) * ms + acc * (1.0 - ms); pet *= 1.0 - ms;
+                      rim = max(rim, ms * step(sw * 0.3, dx * sign(Ld.x)) * 0.6); }
+      // a leaf
+      float tl = 0.28 + 0.22 * h.y;
+      vec2 l0 = vec2(mix(bx, c.x, tl) + R * 2.0 * tl * (1.0 - tl) * side, root - tl * (root - c.y));
+      vec2 ld = normalize(vec2(side * 0.8, -0.6));
+      vec2 q = p - l0;
+      float lu = dot(q, ld) / (R * 2.3);
+      float lv = dot(q, vec2(-ld.y, ld.x)) / (R * 0.42) + side * 1.2 * lu * lu;
+      if (lu > 0.0 && lu < 1.0 && abs(lv) < 1.3) {
+        float lw = sqrt(4.0 * lu * (1.0 - lu));
+        float ml = smoothstep(lw + soft, lw - soft, abs(lv));
+        vec3 lc = mix(vec3(0.36, 0.46, 0.24), vec3(0.58, 0.66, 0.36), step(0.0, lv * side));
+        lc *= 1.0 - 0.18 * smoothstep(0.12, 0.0, abs(lv)) * (1.0 - lu);           // midrib
+        acc = vec4(lc, 1.0) * ml + acc * (1.0 - ml);
+        pet *= 1.0 - ml;
+      }
+    }
+    float kind = floor(fract(h.z * 7.7 + h.x * 3.1) * kindMax);
+    vec4 b = bloom(p, c, R, kind, fract(h.x * 13.1 + h.z * 5.7), soft, Ld, rim);
+    acc = vec4(b.rgb, 1.0) * b.a + acc * (1.0 - b.a);
+    pet = b.a + pet * (1.0 - b.a);
+  }
+}
+
+// tall grass blades; one shared wind lean keeps the neighbour search to 3 cells
+void blades(vec2 p, float cs, float seed, float hmax, vec2 Ld, inout vec4 acc, inout float rim, inout float pet) {
+  float ht = gRoll + 0.01 - p.y;
+  float shift = (0.6 * sin(p.x * 2.3 + 1.0) + 0.45 * sin(p.x * 9.7 + seed)) * ht * ht;
+  float u = p.x - shift;
+  float id0 = floor(u / cs);
+  for (int k = -1; k <= 1; k++) {
+    float id = id0 + float(k);
+    vec3 h = h32(vec2(id, seed));
+    float bx = (id + 0.2 + 0.6 * h.x) * cs;
+    float ef = edgeF(bx);
+    float bh = (0.04 + hmax * ef) * (0.35 + 0.65 * h.y);
+    if (ht > bh || h.z > 0.35 + 0.55 * ef) continue;
+    float t = ht / bh;
+    float w = cs * (0.28 + 0.2 * h.y) * (1.0 - t);
+    float dx = u - bx - (h.x - 0.5) * cs * 1.6 * t * t;
+    float m = smoothstep(w + 0.0008, max(w - 0.0008, 0.0), abs(dx));
+    vec3 gc = mix(vec3(0.40, 0.46, 0.24), vec3(0.74, 0.72, 0.42), step(0.0, dx * Ld.x) * 0.7 + 0.3 * t);
+    gc *= 0.9 + 0.2 * h.z;
+    m *= 0.75 + 0.25 * h.y;
+    acc = vec4(gc, 1.0) * m + acc * (1.0 - m);
+    pet *= 1.0 - m;
+    rim = max(rim, m * step(0.0, dx * Ld.x) * t * 0.35);
+  }
+}
+
+// returns the foreground (already re-lit for the time of day) and its coverage
+vec4 foreground(vec2 p) {
+  vec2 lp = mix(gSun, gMoon, gLightMix);
+  vec4 acc = vec4(0.0);
+  float rim = 0.0, pet = 0.0;
+  vec2 Ld = normalize(lp - vec2(p.x, gRoll - 0.05));
+  float efx = edgeF(abs(p.x) + 0.1);
+  // mid blooms at the edges
+  if (efx > 0.0 && p.y > gRoll - 0.075 - 0.20 * efx)
+    plants(p, 0.042, 7.0, vec2(0.014, 0.022), vec2(0.03, 0.20), 0.0, 0.14, 3.0, true, Ld, acc, rim, pet);
+  // the soft foliage mass they grow out of, with grassy tufts on top
+  {
+    float ef = edgeF(p.x);
+    float top = gRoll - (0.028 + 0.10 * ef) * (0.7 + 0.6 * vn1(p.x * 9.0 + 4.0));
+    float tf = vn1(p.x * 170.0);
+    float ty = top - tf * tf * tf * (0.010 + 0.028 * ef) - vn1(p.x * 52.0 + 2.0) * 0.008;
+    float m = smoothstep(ty - 0.0015, ty + 0.0025, p.y);
+    if (m > 0.0) {
+      float depth = clamp((p.y - ty) / 0.07, 0.0, 1.0);
+      float fl = vn(vec2(p.x * 115.0, p.y * 12.0));
+      float fl2 = vn(vec2(p.x * 55.0 + 3.0, p.y * 6.0));
+      vec3 c = mix(vec3(0.80, 0.76, 0.47), vec3(0.55, 0.58, 0.33), depth);
+      c *= 0.86 + 0.24 * bands(fl, fl2, 3.0, 0.2);
+      rim = max(rim, smoothstep(0.008, 0.0, p.y - ty) * m * 0.25);
+      acc = vec4(c, 1.0) * m + acc * (1.0 - m);
+      pet *= 1.0 - m;
+    }
+  }
+  // a dense band of small blooms nestled in it, just above the roller, across the width
+  if (p.y > gRoll - 0.085) {
+    float efb = edgeF(p.x);
+    for (int l = 0; l < 2; l++) {
+      float cs = l == 0 ? 0.022 : 0.03;
+      vec2 g = vec2(p.x, gRoll - p.y) / cs + (l == 0 ? vec2(0.0) : vec2(0.5, 0.37));
+      vec2 id = floor(g);
+      float hb = (id.y + 0.5) * cs;                                  // height above the roller
+      vec3 h = h32(id + 19.0 + float(l) * 7.0);
+      if (h.z > (0.55 + 0.35 * efb) * smoothstep(0.075, 0.03, hb)) continue;
+      float R = cs * (0.24 + 0.08 * h.y);
+      vec2 ctr = (id + 0.5 + (h.xy - 0.5) * 0.24) * cs;
+      ctr = vec2(ctr.x, gRoll - ctr.y);
+      vec4 b = bloom(p, ctr, R, floor(fract(h.z * 7.7 + h.x * 3.1) * 3.0), fract(h.x * 13.1 + h.y * 5.7), 0.12, Ld, rim);
+      acc = vec4(b.rgb, 1.0) * b.a + acc * (1.0 - b.a);
+      pet = b.a + pet * (1.0 - b.a);
+    }
+  }
+  // tall grass blades, then big, slightly out-of-focus near blooms at the edges
+  if (p.y > gRoll - 0.05 - 0.22 * efx) blades(p, 0.011, 5.0, 0.20, Ld, acc, rim, pet);
+  if (efx > 0.3 && p.y > gRoll - 0.13 - 0.26 * efx)
+    plants(p, 0.075, 11.0, vec2(0.026, 0.040), vec2(0.05, 0.26), -0.6, 0.26, 3.0, true, Ld, acc, rim, pet);
+  // two sunflowers
+  float m = 0.2 * gHalfW;
+  {
+    vec2 c = vec2(gHalfW - max(0.036, 0.4 * m), gRoll - 0.12);
+    float R = 0.042;
+    if (abs(p.x - c.x) < R * 2.8 && p.y > c.y - R * 1.2) {
+      float t = (gRoll + 0.02 - p.y) / (gRoll + 0.02 - c.y);
+      float dx = p.x - (c.x + 0.012 * t);
+      if (t > 0.0 && t < 1.0) {
+        float ms = smoothstep(0.0042, 0.0028, abs(dx));
+        acc = vec4(mix(vec3(0.34, 0.43, 0.22), vec3(0.56, 0.62, 0.32), step(0.0, dx * Ld.x)), 1.0) * ms + acc * (1.0 - ms);
+        pet *= 1.0 - ms;
+        // two broad leaves
+        for (int i = 0; i < 2; i++) {
+          float side = i == 0 ? -1.0 : 1.0;
+          vec2 l0 = vec2(c.x + 0.012 * (0.35 + 0.2 * float(i)), gRoll + 0.02 - (0.35 + 0.2 * float(i)) * (gRoll + 0.02 - c.y));
+          vec2 ld = normalize(vec2(side * 0.9, -0.35));
+          vec2 q = p - l0;
+          float lu = dot(q, ld) / 0.075;
+          float lv = dot(q, vec2(-ld.y, ld.x)) / 0.024 + side * 0.9 * lu * lu;
+          if (lu > 0.0 && lu < 1.0) {
+            float lw = sqrt(4.0 * lu * (1.0 - lu)) * (1.0 - 0.3 * lu);
+            float ml = smoothstep(lw + 0.12, lw - 0.12, abs(lv));
+            vec3 lc = mix(vec3(0.34, 0.44, 0.22), vec3(0.56, 0.64, 0.34), step(0.0, lv * side));
+            acc = vec4(lc, 1.0) * ml + acc * (1.0 - ml);
+            pet *= 1.0 - ml;
+          }
+        }
+      }
+      vec4 b = bloom(p, c, R, 3.0, 0.37, 0.07, Ld, rim);
+      acc = vec4(b.rgb, 1.0) * b.a + acc * (1.0 - b.a);
+      pet = b.a + pet * (1.0 - b.a);
+    }
+  }
+  {
+    vec2 c = vec2(-(gHalfW - max(0.05, 0.5 * m)), gRoll - 0.215);
+    float R = 0.027;
+    if (abs(p.x - c.x) < R * 1.3 && p.y > c.y - R * 1.2) {
+      float dx = p.x - c.x + 0.006 * (gRoll - p.y - 0.1);
+      float ms = smoothstep(0.0032, 0.0020, abs(dx)) * step(c.y, p.y);
+      acc = vec4(vec3(0.36, 0.45, 0.23), 1.0) * ms + acc * (1.0 - ms);
+      pet *= 1.0 - ms;
+      vec4 b = bloom(p, c, R, 3.0, 0.81, 0.09, Ld, rim);
+      acc = vec4(b.rgb, 1.0) * b.a + acc * (1.0 - b.a);
+      pet = b.a + pet * (1.0 - b.a);
+    }
+  }
+  if (acc.a <= 0.0) return vec4(0.0);
+  vec3 col = acc.rgb / acc.a;
+  col *= 0.94 + 0.08 * vn(p * 90.0);                                         // gouache unevenness
+  // vegetation is re-lit like the near land; petals keep a little light:
+  // warm at sunset, dim, cool and moonlit at night
+  float L = dot(col, vec3(0.30, 0.55, 0.15));
+  float pf = pet / acc.a;
+  col = grade(col, 0.92);
+  col += pf * L * (vec3(0.12, 0.05, 0.02) * gW.y + vec3(0.07, 0.05, 0.10) * gW.z + vec3(0.13, 0.16, 0.25) * gW.w);
+  col = mix(col, gRim, clamp(rim * todf(vec4(0.22, 0.6, 0.35, 0.3)), 0.0, 1.0));
+  // the roller-side mist sits in front of the stems
+  col = mix(col, grade(C_MIST, 0.6), smoothstep(gRoll - 0.05, gRoll, p.y) * 0.65);
+  return vec4(col, acc.a);
+}
+
+// --------------------------------------------------------------- composite --
+// atmospheric bloom (sun spreading along the horizon as it sets, then the moon);
+// affine in the colour, so it can be applied to each layer separately
+vec3 bloomOver(vec3 col, vec2 p) {
+  vec2 d = p - gSun;
+  float r = length(d * vec2(0.7 - 0.3 * gSet, 1.1 + 0.6 * gSet));
+  col = mix(col, gGlowC, exp(-r * 2.2) * gBloomAmt);
+  col = mix(col, gCoreC, exp(-r * 6.5) * gCoreAmt);
+  if (gMoonVis > 0.0) col = mix(col, vec3(0.70, 0.76, 0.92), exp(-length(p - gMoon) * 9.0) * 0.18 * gMoonVis);
+  return col;
+}
+
+// one sample of the requested layer, premultiplied rgba
+vec4 paintSample(vec2 px, vec2 res) {
+  vec2 p = vec2((px.x - 0.5 * res.x) / res.y, px.y / res.y);
+  bool plate = gAll || LAYER_ID < 0.5;
+  bool cloudL = gAll || (LAYER_ID > 0.5 && LAYER_ID < 1.5);
+  bool fgL = gAll || LAYER_ID > 1.5;
+  if (p.y > gRoll + 0.004) {
+    // hidden under the typewriter roller: just let the mist continue, cheaply
+    if (!plate) return vec4(0.0);
+    float mb = vn(vec2(p.x * 10.0, p.y * 80.0));
+    return vec4(clamp(grade(mix(C_MIST, C_MEADOW1, 0.10 + 0.10 * mb), 0.5), 0.0, 1.0), 1.0);
+  }
+  vec4 col = vec4(0.0);
+#if HAS_PLATE
+  if (plate) {
+    if (p.y < gHor + 0.002) col = vec4(sky(p), 1.0);
+  }
+#endif
+#if HAS_CLOUDS
+  if (cloudL && p.y < gHor - 0.06) {
+    vec4 c = clouds(p);
+    col = vec4(c.rgb, 1.0) * c.a + col * (1.0 - c.a);
+  }
+#endif
+#if HAS_PLATE
+  if (plate && p.y > gHor - 0.12) {
+    vec4 l = land(p);
+    col = vec4(l.rgb, 1.0) * l.a + col * (1.0 - l.a);
+  }
+#endif
+#if HAS_FG
+  // foreground flowers and grass: only where they can reach
+  if (fgL && p.y > gRoll - 0.085 - 0.34 * edgeF(abs(p.x) + 0.1)) {
+    vec4 f = foreground(p);
+    col = vec4(f.rgb, 1.0) * f.a + col * (1.0 - f.a);
+  }
+#endif
+#if HAS_EXTRAS
+  if (gAll && gNight > 0.0 && p.y > gHor + 0.03) {
+    // a few warm fireflies drifting over the meadow and flowers
     const float FC = 0.045;
     vec2 id = floor(p / FC);
     vec3 h = h32(id + 77.0);
@@ -1793,38 +2182,12 @@ vec4 land(vec2 p) {
       vec2 dd = p - (id + 0.3 + 0.4 * h.xy) * FC;
       float d2 = dot(dd, dd);
       float glow = exp(-d2 / 0.0000045) + 0.35 * exp(-d2 / 0.00003);
-      col += vec3(1.0, 0.80, 0.40) * glow * gNight * (0.6 + 0.4 * h.x) * (1.0 - mist * 0.7);
+      col.rgb += vec3(1.0, 0.80, 0.40) * glow * gNight * (0.6 + 0.4 * h.x) * (1.0 - smoothstep(gRoll - 0.03, gRoll, p.y) * 0.6);
     }
   }
-  return vec4(col, acc.a);
-}
-
-// --------------------------------------------------------------- composite --
-vec3 paintSample(vec2 px, vec2 res) {
-  vec2 p = vec2((px.x - 0.5 * res.x) / res.y, px.y / res.y);
-  if (p.y > gRoll + 0.004) {
-    // hidden under the typewriter roller: just let the mist continue, cheaply
-    float mb = vn(vec2(p.x * 10.0, p.y * 80.0));
-    return grade(mix(C_MIST, C_MEADOW1, 0.10 + 0.10 * mb), 0.5);
-  }
-  vec3 col = vec3(0.0);
-  if (p.y < gHor + 0.002) {
-    col = sky(p);
-    if (p.y < gHor + 0.02) {
-      vec4 c = clouds(p);
-      col = mix(col, c.rgb, c.a);
-    }
-  }
-  if (p.y > gHor - 0.12) {
-    vec4 l = land(p);
-    col = mix(col, l.rgb, l.a);
-  }
-  // atmospheric bloom: sun (spreading along the horizon as it sets), then the moon
-  vec2 d = p - gSun;
-  float r = length(d * vec2(0.7 - 0.3 * gSet, 1.1 + 0.6 * gSet));
-  col = mix(col, gGlowC, exp(-r * 2.2) * gBloomAmt);
-  col = mix(col, gCoreC, exp(-r * 6.5) * gCoreAmt);
-  if (gMoonVis > 0.0) col = mix(col, vec3(0.70, 0.76, 0.92), exp(-length(p - gMoon) * 9.0) * 0.18 * gMoonVis);
+#endif
+  if (col.a <= 0.0) return vec4(0.0);
+  col.rgb = bloomOver(col.rgb / col.a, p) * col.a;
   return clamp(col, 0.0, 1.0);
 }
 
@@ -1835,16 +2198,17 @@ vec3 paperGrain(vec3 col, vec2 px, vec2 res) {
   return col * (0.976 + 0.04 * gr);
 }
 
-vec3 painting(vec2 px, vec2 res) {
+// the selected layer (uLayer) as premultiplied rgba
+vec4 paintingLayer(vec2 px, vec2 res) {
   setupScene(res);
 #if SSAA
   // 4x rotated-grid supersampling
-  vec3 c = paintSample(px + vec2( 0.125,  0.375), res);
+  vec4 c = paintSample(px + vec2( 0.125,  0.375), res);
 #if SSAA_ADAPTIVE
   // quads whose first sample is already smooth skip the other three
-  // (needs painting() to be called in uniform control flow, as from main())
-  vec3 dc = abs(dFdx(c)) + abs(dFdy(c));
-  if (max(dc.r, max(dc.g, dc.b)) > SSAA_THRESHOLD) {
+  // (needs to be called in uniform control flow, as from main())
+  vec4 dc = abs(dFdx(c)) + abs(dFdy(c));
+  if (max(max(dc.r, dc.g), max(dc.b, dc.a)) > SSAA_THRESHOLD) {
 #endif
     c += paintSample(px + vec2(-0.375,  0.125), res);
     c += paintSample(px + vec2(-0.125, -0.375), res);
@@ -1854,10 +2218,14 @@ vec3 painting(vec2 px, vec2 res) {
   }
 #endif
 #else
-  vec3 c = paintSample(px, res);
+  vec4 c = paintSample(px, res);
 #endif
-  return paperGrain(c, px, res);
+  c.rgb = paperGrain(c.rgb, px, res);
+  return c;
 }
+
+// rgb of the selected layer (premultiplied for layers 1 and 2; the plate is opaque)
+vec3 painting(vec2 px, vec2 res) { return paintingLayer(px, res).rgb; }
 `;
 const FULL_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 // The view is painted in three layers, each into its own target: the plate (sky, sun, hills, meadow), the clouds and the
@@ -1902,6 +2270,25 @@ void main() {
   float roller = uRollerY / H, horizon = roller - 0.22;
   vec3 col = texture2D(uPlate, vUv).rgb;
 
+  // Stars, as the painting draws them (two jittered grids, denser toward the top), each twinkling at its own pace.
+  float nightSky = smoothstep(0.55, 0.95, uNight);
+  if (nightSky > 0.0 && q.y < horizon) {
+    float dens = mix(0.42, 0.04, smoothstep(0.0, horizon, q.y));
+    for (int k = 0; k < 2; k++) {
+      float cell = k == 0 ? 0.036 : 0.018, fk = float(k);
+      vec2 g = q / cell, id = floor(g), f = fract(g), r = h22(id + fk * 31.0);
+      if (r.x < (k == 0 ? 0.80 : 0.45) * dens) {
+        vec2 c = 0.3 + 0.4 * h22(id + 7.0 + fk);
+        float rr = h21(id + 3.0 + fk), rad = (k == 0 ? 0.0019 + 0.0034 * rr * rr * rr : 0.0015);
+        vec2 dd = (f - c) * cell * vec2(1.0, 0.75 + 0.5 * r.y); float d = length(dd);
+        float dab = smoothstep(rad, 0.2 * rad, d) + 0.3 * exp(-d * d / (4.0 * rad * rad));
+        float b = (0.35 + 0.65 * h21(id + 11.0 + fk)) * (k == 0 ? 1.0 : 0.6) * (0.6 + 0.4 * sin(t * (1.1 + 2.4 * r.y) + r.x * 60.0));
+        vec3 sc = h21(id + 23.0) < 0.3 ? vec3(1.0, 0.92, 0.78) : vec3(0.88, 0.92, 1.0);
+        col = mix(col, sc, clamp(dab * b * nightSky, 0.0, 1.0));
+      }
+    }
+  }
+
   // Clouds: a slow fluid billow (curl of two noise fields) and a long, gentle drift.
   vec2 w = vec2(fbm(q * 2.4 + vec2(t * 0.030, 1.7)), fbm(q * 2.4 + vec2(5.2, -t * 0.026))) - 0.5;
   w += 0.5 * (vec2(fbm(q * 5.1 - vec2(t * 0.05, 0.0)), fbm(q * 5.1 + vec2(0.0, t * 0.045) + 9.0)) - 0.5);
@@ -1931,18 +2318,21 @@ void main() {
   vec4 fl = texture2D(uFlora, vUv + vec2(sway / aspect, 0.0));
   col = col * (1.0 - fl.a) + fl.rgb;
 
-  // Pollen in the sunlight by day; at night, twinkling stars and wandering fireflies.
+  // Pollen in the sunlight by day; at night, wandering fireflies.
   float day = 1.0 - smoothstep(0.35, 0.7, uNight), night = smoothstep(0.55, 0.95, uNight);
   if (day > 0.0) {
     float pollen = specks(q, 0.11, vec2(0.012, -0.006), t, 0.0028, 0.35, 0.3) * smoothstep(roller, horizon - 0.25, q.y);
     col = mix(col, vec3(1.0, 0.95, 0.78), pollen * 0.55 * day);
   }
-  if (night > 0.0) {
-    float stars = specks(q * vec2(1.0, 1.0) + 13.0, 0.045, vec2(0.0), t, 0.0016, 0.55, 0.9) * smoothstep(horizon - 0.02, 0.0, q.y);
-    stars *= 1.0 - cl.a;
-    col += vec3(0.95, 0.93, 1.0) * stars * 0.85 * night;
-    float flies = specks(q + 5.0, 0.07, vec2(0.006, 0.002), t * 0.8, 0.0035, 0.3, 1.0) * smoothstep(horizon - 0.04, horizon + 0.04, q.y) * smoothstep(roller + 0.01, roller - 0.03, q.y);
-    col += vec3(1.0, 0.82, 0.38) * flies * 1.4 * night;
+  if (night > 0.0 && q.y > horizon + 0.03 && q.y < roller) {
+    vec2 g = q / 0.045, id = floor(g), f = fract(g), r = h22(id + 19.0);
+    if (r.x < 0.13) {
+      vec2 c = 0.3 + 0.4 * h22(id + 5.0) + 0.22 * vec2(sin(t * (0.35 + 0.3 * r.y) + r.x * 70.0), cos(t * (0.28 + 0.25 * r.x) + r.y * 50.0));
+      vec2 dd = (f - c) * 0.045; float d2 = dot(dd, dd);
+      float glow = exp(-d2 / 4.5e-6) + 0.35 * exp(-d2 / 3.0e-5);
+      float blink = 0.25 + 0.75 * smoothstep(-0.2, 0.9, sin(t * (0.9 + 0.8 * r.y) + r.x * 40.0));
+      col += vec3(1.0, 0.80, 0.40) * glow * (0.6 + 0.4 * h21(id)) * blink * night * (1.0 - 0.6 * smoothstep(roller - 0.03, roller, q.y));
+    }
   }
 
   float below = px.y - uBodyY;
@@ -2386,18 +2776,22 @@ function wordAround(i) {
   return [a, b];
 }
 function selectAll() { if (typist.chars.length) setSel(0, typist.chars.length); }
-// The new text replaces the whole sheet, so every edit is one step back with Undo.
-function setText(text) {
-  typist = new Typist(text); sheet.text = typist.text; sheet.updated = Date.now(); persist();
-  review = clamp(review, 0, reviewLimit()); coast = null;
+// After any edit that is not a plain keystroke: save, re-ink the page, put the machine at the caret.
+function refresh() {
+  sheet.text = typist.text; sheet.ids = packIds(typist.ids); sheet.updated = Date.now(); persist();
+  review = clamp(review, reviewMin(), reviewLimit()); coast = null;
   if (GL) GL.redrawAll();
   retarget(); kick(); updateMeta();
 }
+const snapshot = () => ({ text: typist.text, ids: packIds(typist.ids), caret: typist.caret });
+function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 50) undoStack.shift(); lastEdit = performance.now(); }
+// Typing is undone a burst at a time: a pause, or moving the caret, starts a new step.
+let lastEdit = 0;
+function undoMark() { if (performance.now() - lastEdit > 1200) pushUndo(); lastEdit = performance.now(); }
 function removeSel(quiet) {
   const r = selRange(); if (!r) return 0;
-  undoStack.push(sheet.text); if (undoStack.length > 50) undoStack.shift();
-  const c = typist.chars; clearSel();
-  setText(c.slice(0, r[0]).join("") + c.slice(r[1]).join(""));
+  pushUndo(); clearSel();
+  typist.remove(r[0], r[1]); typist.setCaret(r[0]); refresh();
   if (!quiet) feedback(["backspace"]);
   return r[1] - r[0];
 }
@@ -2407,7 +2801,9 @@ function deleteSel() {
 }
 function undoEdit() {
   if (!undoStack.length) return;
-  clearSel(); setText(undoStack.pop()); unlockAudio(); play("feed", 0.6);
+  const sn = undoStack.pop();
+  clearSel(); typist = new Typist(sn.text, sn.ids); typist.setCaret(sn.caret); review = 0; refresh();
+  unlockAudio(); play("feed", 0.6);
 }
 // Copies through a throwaway text field, which works in every browser and inside the artifact frame.
 let keepTyping = false;
@@ -2434,25 +2830,62 @@ async function pasteClipboard() {
 // ---------- Typing ----------
 function strike(input) {
   if (!input) return;
-  if (sel) { const r = selRange(); if (r && r[1] === typist.chars.length) removeSel(true); else clearSel(); }   // type over a selection that runs to the carriage
-  unlockAudio();
-  const before = typist.layout.line;
-  after(typist.type(input), before);
+  if (selRange()) { removeSel(true); } else clearSel();   // typing replaces a selection, wherever it is
+  unlockAudio(); undoMark();
+  edit(() => typist.type(input));
 }
-function takeBack() { if (selRange()) { deleteSel(); return; } clearSel(); unlockAudio(); const before = typist.layout.line; after(typist.backspace(), before); }
-function after(events, beforeLine) {
+function takeBack(forward) {
+  if (selRange()) { deleteSel(); return; }
+  clearSel(); unlockAudio(); undoMark();
+  edit(() => forward ? typist.forwardDelete() : typist.backspace());
+}
+// One keystroke: in the middle of the text the lines after it may reflow, so re-ink more than the line typed on.
+function edit(change) {
+  const atEnd = typist.caret === typist.chars.length, beforeLine = caretLine(), beforeCount = typist.layout.lines.length;
+  const events = change();
   feedback(events);
   if (!events.length || (events.length === 1 && events[0] === "jammed")) return;
-  const isReturn = events.includes("return");
-  if (isReturn) setFeel(["x", "y"], 0.42, 0.86); else setFeel(["x", "y"], 0.1, 0.95);
+  if (events.includes("return")) setFeel(["x", "y"], 0.42, 0.86); else setFeel(["x", "y"], 0.1, 0.95);
   review = 0; coast = null;
-  sheet.text = typist.text; sheet.updated = Date.now(); persist();
-  if (GL) GL.patchInk(Math.max(0, Math.min(beforeLine, typist.layout.line) - 1), Math.max(beforeLine, typist.layout.line) + 1);
+  sheet.text = typist.text; sheet.ids = packIds(typist.ids); sheet.updated = Date.now(); persist();
+  const now = caretLine(), lines = typist.layout.lines;
+  if (GL) {
+    if (atEnd && typist.caret === typist.chars.length) GL.patchInk(Math.max(0, Math.min(beforeLine, now) - 1), Math.max(beforeLine, now) + 1);
+    else if (lines.length !== beforeCount) GL.redrawAll();
+    else { let end = now; while (end < lines.length - 1 && !lines[end].ret) end++; GL.patchInk(Math.max(0, Math.min(beforeLine, now) - 1), end + 1); }
+  }
   retarget(); kick(); updateMeta();
+}
+// Moves the caret (Shift extends a selection from where it was). The page rolls the caret's line to the type guide.
+function moveCaret(b, extend) {
+  const from = typist.caret; lastEdit = 0;
+  if (extend) { const anchor = sel ? sel.a : from; typist.setCaret(b); setSel(anchor, typist.caret); }
+  else { clearSel(); typist.setCaret(b); }
+  review = 0; coast = null; setFeel(["x", "y"], 0.3, 0.9); retarget(); kick();
+}
+// The gap nearest to column c on line li (alignment included).
+function boundaryOnLine(li, c) {
+  const line = typist.layout.lines[clamp(li, 0, typist.layout.lines.length - 1)];
+  for (const g of line.glyphs) if (c < g.col + 0.5) return g.index;
+  if (line.end != null) return line.end;
+  return line.glyphs.length ? line.glyphs[line.glyphs.length - 1].index + 1 : typist.chars.length;
+}
+function caretKey(e) {
+  const [li, col] = typist.caretPos(), r = selRange(), n = typist.chars.length, lines = typist.layout.lines;
+  const mod = e.metaKey || e.ctrlKey, k = e.key;
+  let b = null;
+  if (k === "ArrowLeft") b = mod ? boundaryOnLine(li, -1) : r && !e.shiftKey ? r[0] : typist.caret - 1;
+  else if (k === "ArrowRight") b = mod ? boundaryOnLine(li, 1e9) : r && !e.shiftKey ? r[1] : typist.caret + 1;
+  else if (k === "ArrowUp") b = mod ? 0 : li > 0 ? boundaryOnLine(li - 1, col - 0.5) : 0;
+  else if (k === "ArrowDown") b = mod ? n : li < lines.length - 1 ? boundaryOnLine(li + 1, col - 0.5) : n;
+  else if (k === "Home") b = mod ? 0 : boundaryOnLine(li, -1);
+  else if (k === "End") b = mod ? n : boundaryOnLine(li, 1e9);
+  if (b === null) return false;
+  e.preventDefault(); moveCaret(b, e.shiftKey); return true;
 }
 // The hidden field always holds two spaces, so Backspace has something to delete on phone keyboards.
 const SENTINEL = "  ";
-const BACKSPACES = new Set(["deleteContentBackward", "deleteWordBackward", "deleteSoftLineBackward", "deleteHardLineBackward", "deleteContentForward"]);
+const BACKSPACES = new Set(["deleteContentBackward", "deleteWordBackward", "deleteSoftLineBackward", "deleteHardLineBackward"]);
 function resetKeys() { keys.value = SENTINEL; keys.setSelectionRange(SENTINEL.length, SENTINEL.length); }
 let composing = false;
 keys.addEventListener("compositionstart", () => { composing = true; });
@@ -2464,6 +2897,7 @@ keys.addEventListener("beforeinput", e => {
   else if (t === "insertLineBreak" || t === "insertParagraph") { e.preventDefault(); strike("\n"); }
   else if (t === "insertFromPaste" || t === "insertFromDrop") { e.preventDefault(); strike((e.dataTransfer && e.dataTransfer.getData("text/plain")) || e.data || ""); }
   else if (BACKSPACES.has(t)) { e.preventDefault(); takeBack(); }
+  else if (t === "deleteContentForward") { e.preventDefault(); takeBack(true); }
   else if (t && t.startsWith("delete")) e.preventDefault();
 });
 keys.addEventListener("input", () => {
@@ -2478,6 +2912,7 @@ keys.addEventListener("paste", e => {
   if (text) { e.preventDefault(); strike(text); }
 });
 keys.addEventListener("keydown", e => {
+  if (!e.altKey && caretKey(e)) return;
   if (e.key === "Escape") { e.preventDefault(); setTyping(false); }
   else if (e.key === "Tab") { e.preventDefault(); strike("\t"); }
   else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); setTyping(false); openPanel("savePanel", $("#saveKey")); }
@@ -2519,12 +2954,12 @@ stage.addEventListener("pointerdown", e => {
   if (e.pointerType === "mouse") e.preventDefault();
   const moving = coast || Math.abs(spring.y.vel) > 40;
   coast = null;
-  const start = typist.layout.line * LH - spring.y.v;      // catch the page where it is right now
+  const start = caretLine() * LH - spring.y.v;      // catch the page where it is right now
   if (moving) { review = start; spring.y.to = spring.y.v; spring.y.vel = 0; }
   drag = { id: e.pointerId, x: e.clientX, y: e.clientY, start, moved: false, caught: moving || swallowed, wasTyping: typing, samples: [{ t: e.timeStamp, y: e.clientY }] };
   stage.setPointerCapture(e.pointerId);
   // A mouse selects by dragging (Shift extends); a finger scrolls, and selects a word after a long press.
-  const at = boundaryAt(e.clientX, e.clientY);
+  const at = drag.at = boundaryAt(e.clientX, e.clientY);
   if (e.pointerType === "mouse") {
     drag.pick = e.shiftKey && sel ? sel.a : at;
     if (e.shiftKey && sel) { drag.selecting = drag.moved = true; setSel(sel.a, at); }
@@ -2548,26 +2983,30 @@ stage.addEventListener("pointermove", e => {
   if (!drag.moved && Math.abs(dy) > 6) { drag.moved = true; clearTimeout(drag.hold); }
   pushSample(drag.samples, e);
   if (!drag.moved) return;
-  const raw = drag.start + dy / zoom, lim = reviewLimit(), dim = H / zoom;
-  review = raw < 0 ? -rubber(-raw, dim) : raw > lim ? lim + rubber(raw - lim, dim) : raw;
-  spring.y.to = spring.y.v = typist.layout.line * LH - review; spring.y.vel = 0;
+  const raw = drag.start + dy / zoom, lim = reviewLimit(), low = reviewMin(), dim = H / zoom;
+  review = raw < low ? low - rubber(low - raw, dim) : raw > lim ? lim + rubber(raw - lim, dim) : raw;
+  spring.y.to = spring.y.v = caretLine() * LH - review; spring.y.vel = 0;
   rollingByHand(); kick();
 });
 function endDrag(e) {
   if (!drag || e.pointerId !== drag.id) return;
   const d = drag; drag = null; clearTimeout(d.hold);
   if (d.selecting) { if (!selRange() && e.pointerType === "mouse") clearSel(); return; }
-  if (!d.moved && sel) { clearSel(); return; }   // a tap away from a selection just drops it
   if (!d.moved) {
     const lim = reviewLimit();
-    if (review < 0 || review > lim) { review = clamp(review, 0, lim); setFeel(["y"], 0.42, 1); retarget(); kick(); }
-    if (!d.caught) setTyping(!d.wasTyping);
+    if (review < reviewMin() || review > lim) { review = clamp(review, reviewMin(), lim); setFeel(["y"], 0.42, 1); retarget(); kick(); }
+    if (d.caught) return;
+    // A tap on the paper puts the caret there, like a notes app; a tap on the desk beside it stops typing.
+    const left = toScreen(-PAPER_W / 2, 0)[0], right = toScreen(PAPER_W / 2, 0)[0], top = toScreen(0, topMargin(sheet) + spring.y.v)[1];
+    if (e.clientX < left || e.clientX > right || e.clientY < top) { clearSel(); if (typing) setTyping(false); return; }
+    moveCaret(d.at);
+    if (!typing) setTyping(true);
     return;
   }
   const v = velocityOf(d.samples, e.timeStamp) / zoom, lim = reviewLimit();
-  if (review < 0 || review > lim) {
-    review = Math.min(Math.max(review, 0), lim);
-    spring.y.to = typist.layout.line * LH - review; spring.y.vel = -v; setFeel(["y"], 0.42, 1);
+  if (review < reviewMin() || review > lim) {
+    review = clamp(review, reviewMin(), lim);
+    spring.y.to = caretLine() * LH - review; spring.y.vel = -v; setFeel(["y"], 0.42, 1);
   } else if (Math.abs(v) > 30 && !reduceMotion) {
     coast = { v }; handRollUntil = performance.now() + 2500;
   } else { spring.y.to = spring.y.v; }
@@ -2579,12 +3018,12 @@ stage.addEventListener("contextmenu", e => e.preventDefault());
 stage.addEventListener("pointercancel", endDrag);
 stage.addEventListener("wheel", e => {
   e.preventDefault(); coast = null;
-  review = Math.min(Math.max(review - e.deltaY / zoom, 0), reviewLimit());
+  review = clamp(review - e.deltaY / zoom, reviewMin(), reviewLimit());
   rollingByHand(); setFeel(["y"], 0.14, 1); retarget(); kick();
 }, { passive: false });
 function scrollBy(points) {
   coast = null;
-  review = Math.min(Math.max(review + points, 0), reviewLimit());
+  review = clamp(review + points, reviewMin(), reviewLimit());
   rollingByHand(); setFeel(["y"], 0.38, 1); retarget(); kick();
 }
 document.addEventListener("keydown", e => {
@@ -2609,7 +3048,7 @@ function openSheet(s, isNew, skipSave) {
   clearTimeout(saveTimer);
   if (!skipSave && filled(sheet)) persist(true);
   clearSel(); undoStack.length = 0;
-  sheet = s; useMetrics(sheet); typist = new Typist(sheet.text); review = 0; coast = null;
+  sheet = s; useMetrics(sheet); typist = new Typist(sheet.text, sheet.ids); review = 0; coast = null;
   store.set("tw.current", sheet.id);
   retarget(true);
   if (isNew) {
@@ -2831,7 +3270,7 @@ function choose(key, value) {
   sheet[key] = value;
   const d = store.get("tw.defaults", {}); d[key] = value; store.set("tw.defaults", d);
   if (filled(sheet)) persist(true);
-  if (key === "size") { clearSel(); useMetrics(sheet); typist = new Typist(sheet.text); review = clamp(review, 0, reviewLimit()); }
+  if (key === "size") { clearSel(); const at = typist.caret; useMetrics(sheet); typist = new Typist(sheet.text, sheet.ids); typist.setCaret(at); review = clamp(review, reviewMin(), reviewLimit()); }
   if (GL && (key === "face" || key === "size" || key === "align")) GL.redrawAll();
   renderPickers(); retarget(); kick(); placeGhost(); updateMeta();
 }
@@ -2937,7 +3376,7 @@ async function saveBlob(blob, name) {
   return true;
 }
 function exportPng() {
-  const L = layoutChars(typist.chars), h = sheetHeight(sheet, L), scale = Math.min(3, 14000 / h);
+  const L = layoutChars(typist.chars, typist.ids), h = sheetHeight(sheet, L), scale = Math.min(3, 14000 / h);
   let c;
   if (GL) c = GL.exportPng(L, h, scale);
   else {
@@ -3006,7 +3445,7 @@ $("#titleKey").addEventListener("click", e => openPanel("titlePanel", e.currentT
 titleField.addEventListener("input", () => {
   sheet.title = sanitize(titleField.value).replace(/\n/g, " ").slice(0, 48); sheet.updated = Date.now(); persist();
   if (GL) GL.redrawAll();
-  review = clamp(review, 0, reviewLimit()); retarget(); kick(); updateMeta();
+  review = clamp(review, reviewMin(), reviewLimit()); retarget(); kick(); updateMeta();
 });
 titleField.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); closePanel(); } });
 $("#phoneRow").addEventListener("click", () => openPanel("phonePanel", $("#sheetsKey")));

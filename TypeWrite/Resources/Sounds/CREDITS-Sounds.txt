@@ -1,0 +1,58 @@
+TypeWrite sounds: where they come from
+======================================
+
+Every .wav in this folder is cut from a real typewriter recording.
+Tools/make_sounds.py downloads the recordings and rebuilds these files;
+it holds the exact cut points.
+
+Changes made to the recordings: mixed to mono, resampled to 44.1 kHz,
+rumble below 40 Hz removed, lightly de-noised (by at most 12 dB, using the
+recording's own quiet stretch), cut into single events, faded in and out,
+and set to a common loudness. The bell is also high-passed at 3 kHz to
+remove a keystroke under it, and the return has its pauses shortened.
+
+
+key1.wav, key2.wav, key3.wav, key4.wav, space.wav, backspace.wav
+  "Underwood 315 portable typewriter"
+  Recorded by Erik Pålsson for Sounds of Changes
+  https://commons.wikimedia.org/wiki/File:Underwood_315_portable_typewriter.webm
+  Originally https://www.youtube.com/watch?v=J36ZYwF4aRk
+  and http://www.soundsofchanges.eu/sound/underwood-315-portable-typewriter
+  Licence: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+  https://creativecommons.org/licenses/by/3.0/
+
+jam.wav
+  "Olivetti Dora portable typewriter"
+  Recorded by Erik Pålsson for Sounds of Changes
+  https://commons.wikimedia.org/wiki/File:Olivetti_Dora_portable_typewriter.webm
+  Originally https://www.youtube.com/watch?v=WNZ_htIcMNg
+  and http://www.soundsofchanges.eu/sound/olivetti-dora-portable-typewriter
+  Licence: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+  https://creativecommons.org/licenses/by/3.0/
+
+  (Wikimedia Commons verified both videos as CC BY 3.0 on YouTube; the
+  Sounds of Changes archive lists them as CC BY 4.0.)
+
+bell.wav, return.wav
+  "Typewriter bell & carriage reset" by knufds
+  https://freesound.org/people/knufds/sounds/345955/
+  Taken from the two-file split in https://github.com/pbinkley/js-typewriter
+  (commit 4d9f5c31c2401939fcceb9bf8e4b8f57e8892473, released under CC0 1.0)
+  Licence: Creative Commons Zero (CC0 1.0)
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+feed.wav
+  sounds/scroll.wav from https://github.com/pbinkley/js-typewriter
+  by Peter Binkley (same commit), released under CC0 1.0. That project
+  credits its sounds to these Freesound recordings, all CC0:
+    monotraum  https://freesound.org/people/monotraum/sounds/434027/
+    blukotek   https://freesound.org/people/blukotek/sounds/246057/
+    knufds     https://freesound.org/people/knufds/sounds/345955/
+  Licence: Creative Commons Zero (CC0 1.0)
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+
+CC BY 3.0 asks for credit wherever these sounds are shipped. Keep this
+file next to the sounds (Xcode copies it into the app bundle), and credit
+"Typewriter recordings by Erik Pålsson / Sounds of Changes (CC BY 3.0)"
+in the app's or the README's credits.
