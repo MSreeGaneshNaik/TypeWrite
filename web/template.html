@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TypeWrite</title>
+<script src="./support.js"></script>
+<script src="__THREE__"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+__CSS__
+</style>
+</helmet>
+<div class="tw" ref="{{setRoot}}" tabindex="-1" data-typing="{{typingAttr}}" data-selecting="{{selAttr}}" data-lamp="{{lampAttr}}" data-panel="{{panelAttr}}" data-ready="{{readyAttr}}">
+<div class="tw-stage" ref="{{setStage}}" role="img" aria-label="{{stageLabel}}">
+<canvas class="tw-view" ref="{{setView}}" aria-hidden="true"></canvas>
+<canvas class="tw-gl" ref="{{setGl}}" aria-hidden="true"></canvas>
+<sc-if value="{{flatOn}}" hint-placeholder-val="{{false}}">
+<canvas class="tw-gl" ref="{{setFlat}}" aria-hidden="true"></canvas>
+</sc-if>
+</div>
+<sc-if value="{{sendOn}}" hint-placeholder-val="{{false}}">
+<div class="tw-send" data-phase="{{sendPhase}}" style="{{sendCss}}" aria-hidden="true">
+<div class="tw-send-group">
+<div class="tw-send-env tw-send-in"><svg viewBox="0 0 1000 434" preserveAspectRatio="none"><defs>
+<pattern id="tws-stock" patternUnits="userSpaceOnUse" width="1000" height="434"><image href="{{sendEnv}}" width="1000" height="434" preserveAspectRatio="none"></image></pattern>
+<linearGradient id="tws-light" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="760" y2="600"><stop offset="0" stop-color="#fff" stop-opacity=".16"></stop><stop offset=".5" stop-color="#fff" stop-opacity="0"></stop><stop offset="1" stop-color="#2b1e0f" stop-opacity=".1"></stop></linearGradient>
+<linearGradient id="tws-hinge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".45"></stop><stop offset=".25" stop-color="#fff" stop-opacity="0"></stop><stop offset=".6" stop-color="#2b1e0f" stop-opacity=".07"></stop><stop offset="1" stop-color="#2b1e0f" stop-opacity="0"></stop></linearGradient>
+<linearGradient id="tws-hingeIn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b1e0f" stop-opacity=".16"></stop><stop offset="1" stop-color="#2b1e0f" stop-opacity="0"></stop></linearGradient>
+<filter id="tws-blur2" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="2.4"></feGaussianBlur></filter>
+<filter id="tws-blur5" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="5"></feGaussianBlur></filter>
+<filter id="tws-lift" x="-5%" y="-5%" width="110%" height="125%"><feDropShadow dx="0" dy="3.5" stdDeviation="3.4" flood-color="#2b1e0f" flood-opacity=".3"></feDropShadow></filter>
+<filter id="tws-wax" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur in="SourceAlpha" stdDeviation="3.2" result="h"></feGaussianBlur><feDiffuseLighting in="h" surfaceScale="6" diffuseConstant="1.05" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="52"></feDistantLight></feDiffuseLighting><feSpecularLighting in="h" surfaceScale="6" specularConstant="1" specularExponent="20" lighting-color="#ffe9e2" result="s"><feDistantLight azimuth="225" elevation="44"></feDistantLight></feSpecularLighting><feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.15" result="lit"></feComposite><feComposite in="s" in2="SourceAlpha" operator="in" result="sp"></feComposite><feComposite in="lit" in2="sp" operator="arithmetic" k2="1" k3=".6" result="o"></feComposite><feComposite in="o" in2="SourceAlpha" operator="in"></feComposite></filter>
+<filter id="tws-press" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.6" result="h"></feGaussianBlur><feDiffuseLighting in="h" surfaceScale="-7" diffuseConstant="1.05" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="50"></feDistantLight></feDiffuseLighting><feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.1" result="o"></feComposite><feComposite in="o" in2="SourceAlpha" operator="in"></feComposite></filter>
+<filter id="tws-proud" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur in="SourceAlpha" stdDeviation=".9" result="h"></feGaussianBlur><feSpecularLighting in="h" surfaceScale="5" specularConstant=".8" specularExponent="30" lighting-color="#ffd9cf" result="s"><feDistantLight azimuth="225" elevation="40"></feDistantLight></feSpecularLighting><feDiffuseLighting in="h" surfaceScale="5" diffuseConstant="1" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="55"></feDistantLight></feDiffuseLighting><feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.12" result="lit"></feComposite><feComposite in="s" in2="SourceAlpha" operator="in" result="sp"></feComposite><feComposite in="lit" in2="sp" operator="arithmetic" k2="1" k3=".5" result="o"></feComposite><feComposite in="o" in2="SourceAlpha" operator="in"></feComposite></filter>
+<filter id="tws-sealDrop" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="1.5" dy="3" stdDeviation="2.6" flood-color="#2b0d08" flood-opacity=".45"></feDropShadow></filter>
+<clipPath id="tws-pocketClip"><path d="M0 5Q0 0 5 0L474 236L5 434Q0 434 0 429ZM1000 5Q1000 0 995 0L526 236L995 434Q1000 434 1000 429ZM0 434L442 214Q500 186 558 214L1000 434Z"></path></clipPath>
+<clipPath id="tws-bottomClip"><path d="M0 434L442 214Q500 186 558 214L1000 434Z"></path></clipPath>
+<clipPath id="tws-flapClip"><path d="M0 0H1000L560 270Q500 306 440 270Z"></path></clipPath>
+</defs>
+<rect width="1000" height="434" rx="5" fill="url(#tws-stock)"></rect><rect width="1000" height="434" rx="5" fill="#2a1d0e" opacity=".24"></rect>
+<path d="M0 0H1000L526 236Q500 250 474 236Z" fill="#000" opacity=".1" filter="url(#tws-blur5)"></path></svg></div>
+<div class="tw-send-slot"><div class="tw-send-sheet">
+<div class="tw-send-p tw-send-p1"><i></i><b></b></div>
+<div class="tw-send-p tw-send-p2"><i></i><b></b></div>
+<div class="tw-send-p tw-send-p3"><i></i><b></b></div>
+</div></div>
+<div class="tw-send-env tw-send-pocket"><svg viewBox="0 0 1000 434" preserveAspectRatio="none">
+<path d="M5 0L474 236M995 0L526 236" fill="none" stroke="#2b1e0f" stroke-opacity=".26" stroke-width="6" filter="url(#tws-blur2)" transform="translate(0 3.5)"></path>
+<path d="M0 5Q0 0 5 0L474 236L5 434Q0 434 0 429Z" fill="url(#tws-stock)"></path>
+<path d="M1000 5Q1000 0 995 0L526 236L995 434Q1000 434 1000 429Z" fill="url(#tws-stock)"></path>
+<path d="M0 5Q0 0 5 0L474 236L5 434Q0 434 0 429ZM1000 5Q1000 0 995 0L526 236L995 434Q1000 434 1000 429Z" fill="#3a2a14" opacity=".045"></path>
+<path d="M5 1.2L474 236M995 1.2L526 236" fill="none" stroke="#fffdf6" stroke-opacity=".45" stroke-width="1.3"></path>
+<path d="M0 434L442 214Q500 186 558 214L1000 434" fill="none" stroke="#2b1e0f" stroke-opacity=".3" stroke-width="7" filter="url(#tws-blur2)" transform="translate(0 3)"></path>
+<path d="M0 434L442 214Q500 186 558 214L1000 434Z" fill="url(#tws-stock)"></path>
+<path d="M0 434L442 214Q500 186 558 214L1000 434" fill="none" stroke="#5a4320" stroke-opacity=".045" stroke-width="30" clip-path="url(#tws-bottomClip)"></path>
+<path d="M2 433L442 214Q500 186 558 214L998 433" fill="none" stroke="#fffdf6" stroke-opacity=".5" stroke-width="1.4"></path>
+<path d="M1.3 6V428" stroke="#fff" stroke-opacity=".35" stroke-width="2.6"></path><path d="M998.7 6V428" stroke="#2b1e0f" stroke-opacity=".1" stroke-width="2.6"></path><path d="M6 432.7H994" stroke="#2b1e0f" stroke-opacity=".12" stroke-width="2.6"></path>
+<rect width="1000" height="434" fill="url(#tws-light)" clip-path="url(#tws-pocketClip)"></rect></svg></div>
+<div class="tw-send-env tw-send-flap"><svg viewBox="0 0 1000 434" preserveAspectRatio="none"><g class="out">
+<g filter="url(#tws-lift)"><path d="M0 0H1000L560 270Q500 306 440 270Z" fill="url(#tws-stock)"></path></g>
+<path d="M0.0 0.0L18.3 11.3L36.7 22.5L55.0 33.8L73.3 45.0L91.7 56.3L110.0 67.5L128.3 78.8L146.7 90.0L165.0 101.3L183.3 112.5L201.7 123.8L220.0 135.0L238.3 146.3L256.7 157.5L275.0 168.8L293.3 180.0L311.7 191.3L330.0 202.5L348.3 213.8L366.7 225.0L385.0 236.3L403.3 247.5L421.7 258.8L440.0 270.0L450.0 275.5L460.0 280.0L470.0 283.5L480.0 286.0L490.0 287.5L500.0 288.0L510.0 287.5L520.0 286.0L530.0 283.5L540.0 280.0L550.0 275.5L560.0 270.0L578.3 258.8L596.7 247.5L615.0 236.3L633.3 225.0L651.7 213.8L670.0 202.5L688.3 191.3L706.7 180.0L725.0 168.8L743.3 157.5L761.7 146.3L780.0 135.0L798.3 123.8L816.7 112.5L835.0 101.3L853.3 90.0L871.7 78.8L890.0 67.5L908.3 56.3L926.7 45.0L945.0 33.8L963.3 22.5L981.7 11.3L1000.0 0.0L979.1 -34.1L960.7 -22.8L942.4 -11.6L924.1 -0.3L905.7 10.9L887.4 22.2L869.1 33.4L850.7 44.7L832.4 55.9L814.1 67.2L795.7 78.4L777.4 89.7L759.1 100.9L740.7 112.2L722.4 123.4L704.1 134.7L685.7 145.9L667.4 157.2L649.1 168.4L630.7 179.7L612.4 190.9L594.1 202.2L575.7 213.4L557.4 224.7L539.6 235.6L532.1 239.7L525.1 242.9L518.5 245.2L512.2 246.8L506.0 247.7L500.0 248.0L494.0 247.7L487.8 246.8L481.5 245.2L474.9 242.9L467.9 239.7L460.4 235.6L442.6 224.7L424.3 213.4L405.9 202.2L387.6 190.9L369.3 179.7L350.9 168.4L332.6 157.2L314.3 145.9L295.9 134.7L277.6 123.4L259.3 112.2L240.9 100.9L222.6 89.7L204.3 78.4L185.9 67.2L167.6 55.9L149.3 44.7L130.9 33.4L112.6 22.2L94.3 10.9L75.9 -0.3L57.6 -11.6L39.3 -22.8L20.9 -34.1Z" fill="#6b4e1e" fill-opacity=".035" clip-path="url(#tws-flapClip)"></path>
+<path d="M20.9 -34.1L39.3 -22.8L57.6 -11.6L75.9 -0.3L94.3 10.9L112.6 22.2L130.9 33.4L149.3 44.7L167.6 55.9L185.9 67.2L204.3 78.4L222.6 89.7L240.9 100.9L259.3 112.2L277.6 123.4L295.9 134.7L314.3 145.9L332.6 157.2L350.9 168.4L369.3 179.7L387.6 190.9L405.9 202.2L424.3 213.4L442.6 224.7L460.4 235.6L467.9 239.7L474.9 242.9L481.5 245.2L487.8 246.8L494.0 247.7L500.0 248.0L506.0 247.7L512.2 246.8L518.5 245.2L525.1 242.9L532.1 239.7L539.6 235.6L557.4 224.7L575.7 213.4L594.1 202.2L612.4 190.9L630.7 179.7L649.1 168.4L667.4 157.2L685.7 145.9L704.1 134.7L722.4 123.4L740.7 112.2L759.1 100.9L777.4 89.7L795.7 78.4L814.1 67.2L832.4 55.9L850.7 44.7L869.1 33.4L887.4 22.2L905.7 10.9L924.1 -0.3L942.4 -11.6L960.7 -22.8L979.1 -34.1" fill="none" stroke="#fffdf6" stroke-opacity=".14" stroke-width="1" clip-path="url(#tws-flapClip)"></path>
+<path d="M0.0 0.0L18.3 11.3L36.7 22.5L55.0 33.8L73.3 45.0L91.7 56.3L110.0 67.5L128.3 78.8L146.7 90.0L165.0 101.3L183.3 112.5L201.7 123.8L220.0 135.0L238.3 146.3L256.7 157.5L275.0 168.8L293.3 180.0L311.7 191.3L330.0 202.5L348.3 213.8L366.7 225.0L385.0 236.3L403.3 247.5L421.7 258.8L440.0 270.0L450.0 275.5L460.0 280.0L470.0 283.5L480.0 286.0L490.0 287.5L500.0 288.0L510.0 287.5L520.0 286.0L530.0 283.5L540.0 280.0L550.0 275.5L560.0 270.0L578.3 258.8L596.7 247.5L615.0 236.3L633.3 225.0L651.7 213.8L670.0 202.5L688.3 191.3L706.7 180.0L725.0 168.8L743.3 157.5L761.7 146.3L780.0 135.0L798.3 123.8L816.7 112.5L835.0 101.3L853.3 90.0L871.7 78.8L890.0 67.5L908.3 56.3L926.7 45.0L945.0 33.8L963.3 22.5L981.7 11.3L1000.0 0.0" fill="none" stroke="#fffdf6" stroke-opacity=".55" stroke-width="1.8" clip-path="url(#tws-flapClip)"></path>
+<rect width="1000" height="26" fill="url(#tws-hinge)" clip-path="url(#tws-flapClip)"></rect><path d="M0 0H1000L560 270Q500 306 440 270Z" fill="url(#tws-light)"></path></g>
+<g class="in"><path d="M0 0H1000L560 270Q500 306 440 270Z" fill="url(#tws-stock)"></path><path d="M0 0H1000L560 270Q500 306 440 270Z" fill="#2a1d0e" fill-opacity=".15"></path>
+<path d="M0.0 0.0L18.3 11.3L36.7 22.5L55.0 33.8L73.3 45.0L91.7 56.3L110.0 67.5L128.3 78.8L146.7 90.0L165.0 101.3L183.3 112.5L201.7 123.8L220.0 135.0L238.3 146.3L256.7 157.5L275.0 168.8L293.3 180.0L311.7 191.3L330.0 202.5L348.3 213.8L366.7 225.0L385.0 236.3L403.3 247.5L421.7 258.8L440.0 270.0L450.0 275.5L460.0 280.0L470.0 283.5L480.0 286.0L490.0 287.5L500.0 288.0L510.0 287.5L520.0 286.0L530.0 283.5L540.0 280.0L550.0 275.5L560.0 270.0L578.3 258.8L596.7 247.5L615.0 236.3L633.3 225.0L651.7 213.8L670.0 202.5L688.3 191.3L706.7 180.0L725.0 168.8L743.3 157.5L761.7 146.3L780.0 135.0L798.3 123.8L816.7 112.5L835.0 101.3L853.3 90.0L871.7 78.8L890.0 67.5L908.3 56.3L926.7 45.0L945.0 33.8L963.3 22.5L981.7 11.3L1000.0 0.0L979.1 -34.1L960.7 -22.8L942.4 -11.6L924.1 -0.3L905.7 10.9L887.4 22.2L869.1 33.4L850.7 44.7L832.4 55.9L814.1 67.2L795.7 78.4L777.4 89.7L759.1 100.9L740.7 112.2L722.4 123.4L704.1 134.7L685.7 145.9L667.4 157.2L649.1 168.4L630.7 179.7L612.4 190.9L594.1 202.2L575.7 213.4L557.4 224.7L539.6 235.6L532.1 239.7L525.1 242.9L518.5 245.2L512.2 246.8L506.0 247.7L500.0 248.0L494.0 247.7L487.8 246.8L481.5 245.2L474.9 242.9L467.9 239.7L460.4 235.6L442.6 224.7L424.3 213.4L405.9 202.2L387.6 190.9L369.3 179.7L350.9 168.4L332.6 157.2L314.3 145.9L295.9 134.7L277.6 123.4L259.3 112.2L240.9 100.9L222.6 89.7L204.3 78.4L185.9 67.2L167.6 55.9L149.3 44.7L130.9 33.4L112.6 22.2L94.3 10.9L75.9 -0.3L57.6 -11.6L39.3 -22.8L20.9 -34.1Z" fill="#a8873f" fill-opacity=".24" clip-path="url(#tws-flapClip)"></path>
+<path d="M8.8 -14.3L27.1 -3.1L45.5 8.2L63.8 19.4L82.1 30.7L100.5 41.9L118.8 53.2L137.1 64.4L155.5 75.7L173.8 86.9L192.1 98.2L210.5 109.4L228.8 120.7L247.1 131.9L265.5 143.2L283.8 154.4L302.1 165.7L320.5 176.9L338.8 188.2L357.1 199.4L375.5 210.7L393.8 221.9L412.1 233.2L430.5 244.4L448.5 255.5L457.5 260.5L466.2 264.4L474.8 267.4L483.3 269.5L491.7 270.8L500.0 271.2L508.3 270.8L516.7 269.5L525.2 267.4L533.8 264.4L542.5 260.5L551.5 255.5L569.5 244.4L587.9 233.2L606.2 221.9L624.5 210.7L642.9 199.4L661.2 188.2L679.5 176.9L697.9 165.7L716.2 154.4L734.5 143.2L752.9 131.9L771.2 120.7L789.5 109.4L807.9 98.2L826.2 86.9L844.5 75.7L862.9 64.4L881.2 53.2L899.5 41.9L917.9 30.7L936.2 19.4L954.5 8.2L972.9 -3.1L991.2 -14.3" fill="none" stroke="#fff" stroke-opacity=".13" stroke-width="10" stroke-linecap="round" clip-path="url(#tws-flapClip)"></path>
+<path d="M20.9 -34.1L39.3 -22.8L57.6 -11.6L75.9 -0.3L94.3 10.9L112.6 22.2L130.9 33.4L149.3 44.7L167.6 55.9L185.9 67.2L204.3 78.4L222.6 89.7L240.9 100.9L259.3 112.2L277.6 123.4L295.9 134.7L314.3 145.9L332.6 157.2L350.9 168.4L369.3 179.7L387.6 190.9L405.9 202.2L424.3 213.4L442.6 224.7L460.4 235.6L467.9 239.7L474.9 242.9L481.5 245.2L487.8 246.8L494.0 247.7L500.0 248.0L506.0 247.7L512.2 246.8L518.5 245.2L525.1 242.9L532.1 239.7L539.6 235.6L557.4 224.7L575.7 213.4L594.1 202.2L612.4 190.9L630.7 179.7L649.1 168.4L667.4 157.2L685.7 145.9L704.1 134.7L722.4 123.4L740.7 112.2L759.1 100.9L777.4 89.7L795.7 78.4L814.1 67.2L832.4 55.9L850.7 44.7L869.1 33.4L887.4 22.2L905.7 10.9L924.1 -0.3L942.4 -11.6L960.7 -22.8L979.1 -34.1" fill="none" stroke="#6e5222" stroke-opacity=".32" stroke-width="1" clip-path="url(#tws-flapClip)"></path>
+<rect width="1000" height="30" fill="url(#tws-hingeIn)" clip-path="url(#tws-flapClip)"></rect></g></svg></div>
+<div class="tw-send-env tw-send-seal"><svg viewBox="0 0 1000 434" preserveAspectRatio="none"><g filter="url(#tws-sealDrop)"><path d="M557.5 266C558.1 267.6 558.4 269.3 558.6 271C558.8 272.6 558.7 274.3 558.6 276C558.5 277.7 558.2 279.4 557.8 281C557.5 282.7 557 284.3 556.4 285.9C555.8 287.5 555 289 554.1 290.5C553.2 291.9 552.1 293.3 550.8 294.5C549.6 295.7 548.1 296.7 546.6 297.7C545.2 298.6 543.6 299.4 542 300.2C540.5 301 539 301.7 537.6 302.5C536.2 303.2 534.9 304 533.5 304.8C532.2 305.5 531 306.4 529.7 307.1C528.4 307.9 527.1 308.6 525.7 309.2C524.3 309.7 522.8 310.1 521.3 310.4C519.8 310.6 518.2 310.6 516.7 310.6C515.2 310.5 513.7 310.3 512.2 310.2C510.7 310.1 509.3 309.9 508 309.8C506.6 309.8 505.3 309.8 504 309.9C502.6 310 501.3 310.2 500 310.3C498.7 310.5 497.3 310.6 496 310.7C494.6 310.7 493.3 310.7 491.9 310.7C490.5 310.7 489.1 310.5 487.7 310.6C486.2 310.6 484.8 310.6 483.2 310.7C481.6 310.9 479.9 311.2 478.2 311.4C476.4 311.6 474.5 312 472.6 312C470.7 312.1 468.7 312.1 467 311.7C465.3 311.3 463.6 310.6 462.3 309.6C461 308.6 459.9 307.2 459.1 305.7C458.2 304.3 457.7 302.5 457.2 300.9C456.7 299.2 456.4 297.5 456 295.9C455.6 294.3 455.3 292.8 454.8 291.3C454.4 289.8 453.9 288.4 453.5 287C453.1 285.6 452.7 284.2 452.4 282.8C452.2 281.4 452 279.9 451.9 278.5C451.9 277.1 451.9 275.6 452 274.2C452 272.8 452.1 271.4 452.1 270.1C452.1 268.7 452.1 267.4 451.9 266C451.8 264.6 451.5 263.3 451.3 261.9C451.1 260.5 450.7 259 450.6 257.5C450.4 256.1 450.3 254.6 450.3 253.1C450.3 251.6 450.4 250.1 450.6 248.6C450.8 247 451 245.5 451.2 243.9C451.5 242.4 451.7 240.8 452 239.1C452.3 237.5 452.6 235.8 453.1 234.2C453.6 232.5 454.2 230.8 455 229.4C455.9 228 457 226.6 458.3 225.6C459.7 224.6 461.3 223.8 463 223.2C464.6 222.6 466.6 222.4 468.3 222.1C470.1 221.8 471.9 221.8 473.6 221.6C475.2 221.4 476.8 221.2 478.3 220.8C479.7 220.4 481.1 219.8 482.5 219.2C483.8 218.7 485.1 217.9 486.5 217.3C487.9 216.7 489.4 216.1 490.8 215.7C492.3 215.2 493.9 214.9 495.4 214.7C496.9 214.5 498.5 214.5 500 214.5C501.5 214.4 503.1 214.4 504.7 214.3C506.2 214.3 507.8 214.2 509.4 214.2C511 214.2 512.7 214.1 514.3 214.3C515.9 214.6 517.5 214.9 518.9 215.6C520.3 216.3 521.7 217.4 522.8 218.6C523.9 219.8 524.9 221.3 525.7 222.8C526.6 224.2 527.2 225.8 528 227.2C528.7 228.6 529.4 229.9 530.2 231.1C531 232.3 531.9 233.2 532.8 234.2C533.8 235.1 534.8 235.9 535.8 236.8C536.8 237.7 537.9 238.6 538.8 239.6C539.8 240.6 540.6 241.7 541.4 242.8C542.2 243.9 542.9 245.1 543.7 246.2C544.5 247.4 545.2 248.6 546.1 249.7C546.9 250.9 547.9 252.1 548.9 253.3C549.9 254.5 551.1 255.7 552.2 257.1C553.2 258.4 554.4 259.8 555.3 261.3C556.2 262.8 557 264.4 557.5 266Z" fill="#8B2721" filter="url(#tws-wax)"></path>
+<circle cx="500" cy="266" r="32" fill="#7C201B" filter="url(#tws-press)"></circle><circle cx="500" cy="266" r="32.6" fill="none" stroke="#4d120e" stroke-opacity=".35" stroke-width="1"></circle>
+<g transform="translate(480 246) scale(.0893)" fill="#86241F" filter="url(#tws-proud)"><path d="M0 0A112 112 0 0 1 112 112L112 224A112 112 0 0 1 0 112ZM112 0A112 112 0 0 1 224 112A112 112 0 0 1 336 0L336 112A112 112 0 0 1 224 224A112 112 0 0 1 112 112ZM448 0A112 112 0 0 0 336 112L336 224A112 112 0 0 0 448 112Z"></path><path d="M0 448A112 112 0 0 0 112 336L112 224A112 112 0 0 0 0 336ZM112 448A112 112 0 0 0 224 336A112 112 0 0 0 336 448L336 336A112 112 0 0 0 224 224A112 112 0 0 0 112 336ZM448 448A112 112 0 0 1 336 336L336 224A112 112 0 0 1 448 336Z"></path></g>
+<g fill="#ffd8cf" fill-opacity=".18"><circle cx="491.5" cy="229.7" r="0.9"></circle><circle cx="463" cy="243.2" r="0.9"></circle><circle cx="532.7" cy="285.2" r="1.2"></circle><circle cx="465.7" cy="243.6" r="1"></circle><circle cx="503.7" cy="304.6" r="1.3"></circle><circle cx="537.6" cy="268.7" r="1.1"></circle><circle cx="491.6" cy="230.9" r="0.9"></circle></g></g></svg></div>
+</div>
+</div>
+</sc-if>
+<label class="tw-sr" for="tw-keys">Type on the sheet</label>
+<textarea id="tw-keys" class="tw-keys" ref="{{setKeys}}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="enter"></textarea>
+<textarea class="tw-clip" ref="{{setClip}}" tabindex="-1" aria-hidden="true" readonly=""></textarea>
+<a class="tw-sr" ref="{{setDl}}" href="#download" tabindex="-1" aria-hidden="true">Download</a>
+<div class="tw-ghost" aria-hidden="true" data-on="{{ghostOn}}">
+<p class="tw-ghost-ask" ref="{{setGhostAsk}}" data-on="{{ghostAskOn}}" onPointerDown="{{ghostDown}}">{{ghostAskText}}</p>
+<p class="tw-ghost-start" ref="{{setGhostStart}}" data-fade="{{ghostStartFade}}" onPointerDown="{{ghostDown}}">Start here.</p>
+</div>
+
+<header class="tw-hud">
+<button class="tw-hud-btn" type="button" aria-label="Your sheets" title="Your sheets" aria-haspopup="dialog" aria-expanded="{{sheetsX}}" onClick="{{openSheets}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>
+</button>
+<div class="tw-hud-right">
+<span class="tw-count" title="Characters on this sheet">{{count}}</span>
+<sc-if value="{{touchTyping}}" hint-placeholder-val="{{false}}">
+<button class="tw-done" type="button" title="Stop typing (Esc)" onClick="{{done}}">Done</button>
+</sc-if>
+<button class="tw-hud-btn" type="button" aria-label="Share this sheet" title="Share (Ctrl+S)" aria-haspopup="dialog" aria-expanded="{{saveX}}" onClick="{{openSave}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"></path><path d="M8 11H6.5A1.5 1.5 0 0 0 5 12.5v7A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5H16"></path></svg>
+</button>
+</div>
+</header>
+
+<nav class="tw-dock" aria-label="Sheet">
+<button class="tw-dock-btn" type="button" aria-label="Feed a new sheet" title="Feed a new sheet (Alt+N)" onClick="{{feedNew}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5M12 11v6M9 14h6"></path></svg>
+</button>
+<button class="tw-dock-btn" type="button" aria-label="Typeface" title="Typeface" aria-haspopup="dialog" aria-expanded="{{faceX}}" onClick="{{openFace}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V5.5A1.5 1.5 0 0 1 8.5 4h7A1.5 1.5 0 0 1 17 5.5V9"></path><rect x="3" y="9" width="18" height="11" rx="2"></rect><path d="M7 13h.01M10 13h.01M14 13h.01M17 13h.01M8 16.5h8"></path></svg>
+</button>
+<button class="tw-dock-btn" type="button" aria-label="Title" title="Title" aria-haspopup="dialog" aria-expanded="{{titleX}}" onClick="{{openTitle}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5V5h14v1.5M12 5v10M9.5 15h5M6 19h12"></path></svg>
+</button>
+<button class="tw-dock-btn" type="button" aria-label="Pressed flower" title="Pressed flower" aria-haspopup="dialog" aria-expanded="{{flowerX}}" onClick="{{openFlower}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="2"></circle><path d="M12 7a2.5 2.5 0 1 1 2.4-3.2A2.5 2.5 0 1 1 15.6 9a2.5 2.5 0 1 1-1.4 3.9A2.5 2.5 0 1 1 9.8 12.9 2.5 2.5 0 1 1 8.4 9a2.5 2.5 0 1 1 1.2-5.2A2.5 2.5 0 0 1 12 7"></path><path d="M12 13v8M12 18c-2.5 0-4-1.5-4.5-3.5 2 0 3.5.8 4.5 2.4"></path></svg>
+</button>
+<button class="tw-dock-btn" type="button" aria-label="Paper" title="Paper" aria-haspopup="dialog" aria-expanded="{{paperX}}" onClick="{{openPaper}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5a2 2 0 0 1 2-2h7l3 3v11a2 2 0 0 1-2 2h-2"></path><path d="M6 7h6l4 4v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"></path></svg>
+</button>
+<button class="tw-dock-btn" type="button" aria-label="Ribbon" title="Ribbon" aria-haspopup="dialog" aria-expanded="{{inkX}}" onClick="{{openInk}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="2.2"></circle><path d="M12 5.8v.01M17.4 9v.01M17.4 15v.01M12 18.2v.01M6.6 15v.01M6.6 9v.01"></path></svg>
+</button>
+<span class="tw-rule" aria-hidden="true"></span>
+<button class="tw-dock-btn tw-lamp-btn" type="button" aria-pressed="{{lampOn}}" aria-label="Desk lamp" title="Desk lamp" onClick="{{toggleLamp}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5 14.5 3l2 5.5-6.5 2z"></path><path d="M12.7 9.6 9 15l3 6M7 21h9"></path><path d="M15.5 8.5 19 11"></path></svg>
+</button>
+<button class="tw-dock-btn tw-sound-btn" type="button" aria-pressed="{{soundOn}}" aria-label="Sounds" title="Sounds" onClick="{{toggleSound}}">
+<svg class="tw-i tw-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6.5 9H3.5v6h3L11 19z"></path><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18.5 6a8.5 8.5 0 0 1 0 12"></path></svg>
+<svg class="tw-i tw-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6.5 9H3.5v6h3L11 19z"></path><path d="m16 9.5 5 5M21 9.5l-5 5"></path></svg>
+</button>
+</nav>
+
+<div class="tw-edit" role="toolbar" aria-label="Edit the selection" onPointerDown="{{editHold}}">
+<button class="tw-edit-btn" type="button" disabled="{{noSel}}" onClick="{{editCopy}}">Copy</button>
+<button class="tw-edit-btn" type="button" disabled="{{noSel}}" onClick="{{editCut}}">Cut</button>
+<button class="tw-edit-btn" type="button" disabled="{{noSel}}" onClick="{{editDelete}}">Delete</button>
+<span class="tw-rule" aria-hidden="true"></span>
+<button class="tw-edit-btn" type="button" onClick="{{editPaste}}">Paste</button>
+<button class="tw-edit-btn" type="button" onClick="{{editAll}}">Select all</button>
+</div>
+
+<div class="tw-scrim" onPointerDown="{{scrimDown}}"></div>
+
+<sc-if value="{{sheetsOpen}}" hint-placeholder-val="{{false}}">
+<section class="tw-panel tw-wide" data-at="top-left" role="dialog" aria-labelledby="tw-sheets-title">
+<div class="tw-grabber" aria-hidden="true"></div>
+<header>
+<div class="tw-masthead">
+<svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="tw-pp" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="#F7EFDD"></stop><stop offset=".6" stop-color="#EFE3C8"></stop><stop offset="1" stop-color="#D8C49E"></stop></radialGradient><linearGradient id="tw-pk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2B2723"></stop><stop offset="1" stop-color="#0D0B09"></stop></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#tw-pp)"></rect><g transform="translate(12 12) scale(.0892857)" fill="url(#tw-pk)"><path d="M0 0A112 112 0 0 1 112 112L112 224A112 112 0 0 1 0 112ZM112 0A112 112 0 0 1 224 112A112 112 0 0 1 336 0L336 112A112 112 0 0 1 224 224A112 112 0 0 1 112 112ZM448 0A112 112 0 0 0 336 112L336 224A112 112 0 0 0 448 112Z"></path><path d="M0 448A112 112 0 0 0 112 336L112 224A112 112 0 0 0 0 336ZM112 448A112 112 0 0 0 224 336A112 112 0 0 0 336 448L336 336A112 112 0 0 0 224 224A112 112 0 0 0 112 336ZM448 448A112 112 0 0 1 336 336L336 224A112 112 0 0 1 448 336Z"></path></g></svg>
+<h2 id="tw-sheets-title"><span class="tw-wordmark">TypeWrite</span><span class="tw-by">by Jericho</span></h2>
+</div>
+<button class="tw-text-btn" type="button" onClick="{{closePanel}}">Done</button>
+</header>
+<div class="tw-body">
+<p class="tw-label">Your sheets</p>
+<ul class="tw-sheet-list">
+<sc-for list="{{sheetsList}}" as="s" hint-placeholder-count="2">
+<li class="tw-sheet-row" aria-current="{{s.current}}">
+<button class="tw-sheet-open" type="button" onClick="{{s.open}}"><img class="tw-thumb" src="{{s.thumb}}" alt=""><span><span class="tw-sheet-name">{{s.name}}</span><span class="tw-sheet-sub">{{s.sub}}</span></span></button>
+<sc-if value="{{s.canThrow}}" hint-placeholder-val="{{false}}">
+<button class="tw-trash" type="button" aria-label="{{s.throwLabel}}" title="Throw away" onClick="{{s.throwAway}}"><svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg></button>
+</sc-if>
+</li>
+</sc-for>
+</ul>
+<p class="tw-note">Sheets are kept in this browser only. Download any you want to keep.</p>
+<p class="tw-note">Typewriter sounds: Erik Pålsson, Sounds of Changes (CC BY 4.0), with CC0 recordings by knufds and others. The meadow: birds by Thimras (CC0); crickets by dklon (CC BY 3.0); the paper tear by OwlishMedia (CC0), all from OpenGameArt.</p>
+<div class="tw-group">
+<p class="tw-label">Machine</p>
+<div class="tw-switch-row"><span>Key sounds</span><button class="tw-switch" type="button" role="switch" aria-checked="{{soundOn}}" aria-label="Key sounds" onClick="{{toggleSound}}"></button></div>
+<div class="tw-switch-row"><span>Nature sounds<small>Birdsong by day, crickets when the lamp is on</small></span><button class="tw-switch" type="button" role="switch" aria-checked="{{natureOn}}" aria-label="Nature sounds" onClick="{{toggleNature}}"></button></div>
+<div class="tw-switch-row"><span>Key taps<small>On phones that can vibrate</small></span><button class="tw-switch" type="button" role="switch" aria-checked="{{buzzOn}}" aria-label="Key taps" onClick="{{toggleBuzz}}"></button></div>
+<div class="tw-switch-row"><span>Desk lamp<small>Moonlight outside, a warm lamp on the page</small></span><button class="tw-switch" type="button" role="switch" aria-checked="{{lampOn}}" aria-label="Desk lamp" onClick="{{toggleLamp}}"></button></div>
+</div>
+<button class="tw-row-btn tw-danger" type="button" data-armed="{{armed}}" onClick="{{resetAll}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"></path></svg>
+<span><span>{{resetLabel}}</span><small>{{resetHint}}</small></span>
+</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{saveOpen}}" hint-placeholder-val="{{false}}">
+<section class="tw-panel" data-at="top-right" role="dialog" aria-labelledby="tw-save-title">
+<div class="tw-grabber" aria-hidden="true"></div>
+<header><h2 id="tw-save-title">Share</h2><button class="tw-text-btn" type="button" onClick="{{closePanel}}">Done</button></header>
+<div class="tw-body">
+<div class="tw-options">
+<button class="tw-option tw-primary" type="button" disabled="{{saveBlank}}" onClick="{{shareLetter}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="1.5"></rect><path d="m3.5 6.5 8.5 7 8.5-7"></path></svg>
+<b>Send as a letter</b><small>One HTML file that opens in any browser as a sealed envelope</small>
+</button>
+<div class="tw-switch-row"><span>Envelope opening<small>On, they slide across the flap to tear it open. Off, the letter opens flat.</small></span><button class="tw-switch" type="button" role="switch" aria-checked="{{letterOpens}}" aria-label="Envelope opening" onClick="{{toggleLetterOpens}}"></button></div>
+<button class="tw-option" type="button" disabled="{{saveBlank}}" onClick="{{savePng}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg>
+<b>Picture of the sheet</b><small>PNG of the whole page, up to three times size</small>
+</button>
+<button class="tw-option" type="button" disabled="{{saveBlank}}" onClick="{{saveTxt}}">
+<svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 10h14M5 14h10M5 18h7"></path></svg>
+<b>Just the words</b><small>Plain text with your own line breaks</small>
+</button>
+</div>
+<p class="tw-note">{{saveNote}}</p>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{paperOpen}}" hint-placeholder-val="{{false}}">
+<section class="tw-panel" data-at="dock" role="dialog" aria-labelledby="tw-paper-title">
+<div class="tw-grabber" aria-hidden="true"></div>
+<header><h2 id="tw-paper-title">Paper</h2><button class="tw-text-btn" type="button" onClick="{{closePanel}}">Done</button></header>
+<div class="tw-body">
+<div class="tw-chips" role="radiogroup" aria-labelledby="tw-paper-title">
+<sc-for list="{{papers}}" as="p" hint-placeholder-count="5">
+<button class="tw-chip" type="button" role="radio" aria-checked="{{p.on}}" tabindex="{{p.tab}}" onClick="{{p.choose}}"><img class="tw-dot" src="{{p.img}}" alt="">{{p.name}}</button>
+</sc-for>
+</div>
+<p class="tw-note">{{paperNote}}</p>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{inkOpen}}" hint-placeholder-val="{{false}}">
+<section class="tw-panel" data-at="dock" role="dialog" aria-labelledby="tw-ink-title">
+<div class="tw-grabber" aria-hidden="true"></div>
+<header><h2 id="tw-ink-title">Ribbon</h2><button class="tw-text-btn" type="button" onClick="{{closePanel}}">Done</button></header>
+<div class="tw-body">
+<div class="tw-chips" role="radiogroup" aria-labelledby="tw-ink-title">
+<sc-for list="{{inks}}" as="p" hint-placeholder-count="6">
+<button class="tw-chip" type="button" role="radio" aria-checked="{{p.on}}" tabindex="{{p.tab}}" onClick="{{p.choose}}"><img class="tw-dot" src="{{p.img}}" alt="">{{p.name}}</button>
+</sc-for>
+</div>
+<p class="tw-note">{{inkNote}}</p>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{faceOpen}}" hint-placeholder-val="{{false}}">
+<section class="tw-panel" data-at="dock" role="dialog" aria-labelledby="tw-face-title">
+<div class="tw-grabber" aria-hidden="true"></div>
+<header><h2 id="tw-face-title">Typeface</h2><button class="tw-text-btn" type="button" onClick="{{closePanel}}">Done</button></header>
+<div class="tw-body">
+<div class="tw-tiles tw-two" role="radiogroup" aria-labelledby="tw-face-title">
+<sc-for list="{{faces}}" as="p" hint-placeholder-count="4">
+<button class="tw-tile" type="button" role="radio" aria-checked="{{p.on}}" tabindex="{{p.tab}}" onClick="{{p.choose}}"><img src="{{p.img}}" alt="">{{p.name}}</button>
+</sc-for>
+</div>
+<div class="tw-group"><p class="tw-label" id="tw-size-label">Size</p>
+<div class="tw-seg" role="radiogroup" aria-labelledby="tw-size-label">
+<sc-for list="{{sizes}}" as="p" hint-placeholder-count="3"><button class="tw-seg-btn" type="button" role="radio" aria-checked="{{p.on}}" tabindex="{{p.tab}}" onClick="{{p.choose}}">{{p.name}}</button></sc-for>
+</div></div>
+<div class="tw-group"><p class="tw-label" id="tw-spacing-label">Line spacing</p>
+<div class="tw-seg" role="radiogroup" aria-labelledby="tw-spacing-label">
+<sc-for list="{{spacings}}" as="p" hint-placeholder-count="3"><button class="tw-seg-btn" type="button" role="radio" aria-checked="{{p.on}}" tabindex="{{p.tab}}" onClick="{{p.choose}}">{{p.name}}</button></sc-for>
+</div></div>
+<div class="tw-group"><p class="tw-label" id="tw-align-label">Align</p>
+<div class="tw-seg" role="radiogroup" aria-labelledby="tw-align-label">
+<sc-for list="{{aligns}}" as="p" hint-placeholder-count="3"><button class="tw-seg-btn" type="button" role="radio" aria-checked="{{p.on}}" tabindex="{{p.tab}}" aria-label="{{p.name}}" title="{{p.name}}" onClick="{{p.choose}}"><svg class="tw-i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{p.d}}"></path></svg></button></sc-for>
+</div></div>
+<p class="tw-note">Bigger type fits fewer letters on a line, like a wider pitch. The spacing is the machine's line-space lever.</p>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{titleOpen}}" hint-placeholder-val="{{false}}">
+<section class="tw-panel" data-at="dock" role="dialog" aria-labelledby="tw-title-title">
+<div class="tw-grabber" aria-hidden="true"></div>
+<header><h2 id="tw-title-title">Title</h2><button class="tw-text-btn" type="button" onClick="{{closePanel}}">Done</button></header>
+<div class="tw-body">
+<input class="tw-field" ref="{{setTitleField}}" type="text" maxlength="48" placeholder="A title for this sheet" autocomplete="off" aria-labelledby="tw-title-title" value="{{titleValue}}" onChange="{{onTitle}}" onKeyDown="{{titleKey}}">
+<p class="tw-note">Typed at the top of the sheet, centred and a size up. It also names the sheet and its downloads.</p>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{flowerOpen}}" hint-placeholder-val="{{false}}">
+<section class="tw-panel" data-at="dock" role="dialog" aria-labelledby="tw-flower-title">
+<div class="tw-grabber" aria-hidden="true"></div>
+<header><h2 id="tw-flower-title">Pressed flower</h2><button class="tw-text-btn" type="button" onClick="{{closePanel}}">Done</button></header>
+<div class="tw-body">
+<div class="tw-tiles" role="radiogroup" aria-labelledby="tw-flower-title">
+<sc-for list="{{flowers}}" as="p" hint-placeholder-count="6">
+<button class="tw-tile" type="button" role="radio" aria-checked="{{p.on}}" tabindex="{{p.tab}}" aria-label="{{p.name}}" onClick="{{p.choose}}"><img src="{{p.img}}" alt="">{{p.name}}</button>
+</sc-for>
+</div>
+<p class="tw-note">Pressed into the top corner of the sheet, its dyes soaked into the paper.</p>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{toastOn}}" hint-placeholder-val="{{false}}">
+<div class="tw-toast" role="status" aria-live="polite"><span>{{toastText}}</span><sc-if value="{{toastHasAction}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{toastRun}}">{{toastLabel}}</button></sc-if></div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"lamp":{"editor":"enum","options":["Off","On"],"default":"Off"},"$preview":{"width":1440,"height":900}}'>
+__SCRIPT__
+</script>
+</body>
+</html>

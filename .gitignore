@@ -6,3 +6,7 @@ xcuserdata/
 DerivedData/
 .taste-skill/
 .impeccable/review/
+web/node_modules/
+web/out/
+web/canvas/
+web/tests/shots/
