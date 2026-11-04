@@ -13,6 +13,10 @@
   <a href="https://msreeganeshnaik.github.io/TypeWrite/"><b>Type in your browser</b></a> · <a href="#install-on-your-mac-and-iphone"><b>Install on your Mac and iPhone</b></a>
 </p>
 
+<p align="center">
+  <img src="assets/demo.webp" width="100%" alt="The real TypeWrite page. Every key clacks. is typed onto aged paper in a cream and green machine in front of a painted meadow. The next line rings the bell at the margin and the carriage returns. The paper panel switches the sheet to kraft, onionskin, the yellow second sheet and old paper, and the desk lamp turns the meadow to a starry night. The sheet tears out, folds in three and is sealed in an envelope with red wax. On the reader's page a finger tears the flap open and the letter unfolds.">
+</p>
+
 ## Two ways to type
 
 | | Where | What you get |
@@ -23,6 +27,10 @@
 ## In the browser
 
 Open [msreeganeshnaik.github.io/TypeWrite](https://msreeganeshnaik.github.io/TypeWrite/) and start typing (on a phone, tap the page).
+
+<p align="center">
+  <img src="assets/preview.png" width="100%" alt="TypeWrite in the browser. A short letter, Dear Asha, Every key clacks and the bell rings near the margin. Write back soon., is typed in Pica on aged old paper in the machine. Below it the cream type guide with green, amber and red lamps sits on a brass rod, the painted meadow is behind, and the dock holds new sheet, sheet settings, title, pressed flower, paper, ribbon, lamp and sound.">
+</p>
 
 - **The page and the machine are drawn in three.js.** Aged paper with fibres, specks, foxing and browned edges, in five stocks (old paper, bond, onionskin, canary second sheet, kraft); a cloth-ribbon weave in every letter, ragged where the ink soaked in. The platen, knobs, rod and type guide are lit like enamel and brass, and every typebar has faults of its own.
 - **The view** behind the machine is a painted meadow: clouds that drift, small birds, birdsong by day; stars, fireflies and crickets at night. The desk lamp turns the day to night and lights the page.
@@ -78,12 +86,33 @@ For example: `curl -fsSL … | TYPEWRITE_FORCE=1 bash`.
 | Tap the paper | Stop typing: the sheet slides to the centre so you can read whole lines; drag to look back |
 | Share | A picture, the words, or a sealed letter that tears open |
 
+<p align="center">
+  <img src="assets/letter.png" width="100%" alt="A TypeWrite letter as its reader gets it. Left: a cream envelope sealed with red wax on a dark page, above the hint Slide across the flap to open your letter. Right: the same letter torn open and unfolded, still creased in three, reading Every key clacks. The bell rings near the margin.">
+</p>
+
+## Papers
+
+<p align="center">
+  <img src="assets/papers.png" width="100%" alt="The quick brown fox jumps over the lazy dog, typed six ways: Pica in black on old paper with a pressed marigold; Office in blue on white bond; Gothic carbon copy on cockled onionskin with a fern; Pica in red on the yellow second sheet with a daisy; Elite on kraft with lavender; and Elite in a worn ribbon on old paper at night, lit by the desk lamp, with a rose.">
+</p>
+
+| Paper | What it's like |
+|---|---|
+| **Old paper** | Cream laid paper with fibres, specks and foxing. Every sheet ages in its own way. |
+| **Bond** | Twenty-pound cotton bond. The ribbon's ink wicks into the rag fibres. |
+| **Onionskin** | Thin, rag-strong and cockled, made for carbon copies. Hold it to the light and the machine shows through. |
+| **Second sheet** | The yellow manifold stock that took the carbon copy under the top sheet. |
+| **Kraft** | Brown, coarse and full of fibres. The ink soaks in deepest here. |
+
+**Ribbons:** black, red, blue, worn, film and carbon copy. A cloth ribbon prints its weave into every letter, film prints crisp and even, and carbon copy prints soft and smudged.
+
+**Typefaces:** Pica, Elite, Office and Gothic. **Pressed flowers:** marigold, rose, lavender, fern and daisy.
+
 ## What's on the desk
 
 - **Ink that looks struck.** Every letter is nudged, tilted and inked a little differently, with a faint second impression for bleed and the occasional light or heavy strike. The pattern is seeded per sheet, so a page never shimmers when it redraws.
 - **Sounds** for keys (four variations), the space bar, the margin bell, carriage return, backspace and paper feed, each pitched a few percent differently every time.
 - **A real machine's rules:** 30 columns, a bell 6 columns before the margin, no autocorrect, no predictions, straight quotes. Hardware keyboards work, including ⌘V.
-- **Five papers** (old paper, bond, onionskin, canary second sheet, kraft), **six ribbons**, **four typefaces** (Pica, Elite, Office and Gothic) and **five pressed flowers**: marigold, rose, lavender, fern and daisy.
 - **Private.** Your sheets stay on your device, in the browser or in the app. TypeWrite has no accounts and no tracking. Sheets typed in the earlier all-native app move into the new one by themselves the first time it opens.
 
 ## Uninstall
@@ -117,6 +146,7 @@ open TypeWrite.xcodeproj                 # the Mac and iPhone app: pick a device
 | [`ShellTests`](ShellTests) | Tests for the app's own Swift: the move of older sheets into the page (`swift test`) |
 | [`TypeWrite/Resources`](TypeWrite/Resources) | The typewriter sounds (with their credits) and the typefaces with their licences, used by both versions |
 | [`Branding`](Branding) | The app icon and Jericho tile as pure vector SVGs |
+| [`assets`](assets) | The README media, drawn by the real page in Chrome on a Mac's GPU: the demo as an animated WebP, a retina screenshot, the papers grid and the letter |
 | [`Tools`](Tools) | `make_sounds.py` and `make_icons.py`, which regenerate the sounds and icons; `ci/build-apps.sh`, which CI runs on every push to build the app for the iPhone Simulator and the Mac |
 
 ## Credits
