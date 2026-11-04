@@ -1,30 +1,23 @@
-import SwiftData
 import SwiftUI
-#if targetEnvironment(macCatalyst)
-import UIKit
-#endif
 
+/// TypeWrite on the Mac and iPhone: the same machine as the browser version (web/ in this repository), in a native
+/// window, with real haptics and the system share sheet. The page is Resources/TypeWrite.html, made by `npm run build` in web/.
 @main
 struct TypeWriteApp: App {
-    init() {
-        TypeFonts.registerBundledFonts()
-    }
-
     var body: some Scene {
         WindowGroup {
-            DeskView()
-                .preferredColorScheme(.dark)
+            MachineView()
+                .ignoresSafeArea()
+                .statusBarHidden()
                 #if targetEnvironment(macCatalyst)
                 .onAppear(perform: MacWindow.configure)
                 #endif
         }
-        .modelContainer(for: PaperSheet.self)
     }
 }
 
 #if targetEnvironment(macCatalyst)
-/// On a Mac the app runs as a resizable window: keep it tall enough for a sheet,
-/// and let the dark desk run up under a title bar with no title text.
+/// On a Mac the app runs as a resizable window: keep it tall enough for a sheet, with no title text in the title bar.
 enum MacWindow {
     static func configure() {
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
