@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>%%TITLE%%</title>
+<style>
+:root{--ground:#E7E1CF;--ink:#23211E;--muted:#5D574E;--paper:%%PAPER%%;--wax:#8E2A22;--wax-hi:#B5463A;--ease:cubic-bezier(.2,.9,.25,1)}
+.night{--ground:#151A22;--ink:#E9E4DA;--muted:#A49D90}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:rgba(160,106,28,.3)}
+main{position:relative;min-height:100vh;min-height:100svh;height:var(--page-h,auto);overflow:hidden}
+.piece{position:absolute;left:var(--ex);top:var(--ey);width:var(--ew);height:var(--eh);transform:translateY(var(--env-y,0));transition:transform .7s var(--ease),opacity .5s}
+.piece svg{display:block;width:100%;height:100%;overflow:visible}
+.gone .piece{--env-y:46vh;opacity:0}
+.shadow{z-index:0;border-radius:4px;box-shadow:0 18px 40px -14px rgba(40,30,15,.38),0 3px 8px rgba(40,30,15,.16)}
+.night .shadow{box-shadow:0 18px 40px -14px rgba(0,0,0,.7),0 3px 8px rgba(0,0,0,.45)}
+.inside{z-index:1}
+.pocket{z-index:3;pointer-events:none}
+.flap{z-index:5;cursor:grab;touch-action:none;transform-origin:50% 0;transform:translateY(var(--env-y,0)) perspective(1600px) rotateX(var(--flap,0deg))}
+.flap:active{cursor:grabbing}
+.flap.torn{transition:transform .55s var(--ease)}
+.flap.open{--flap:-176deg;z-index:1}
+.flap-low{z-index:4;pointer-events:none}
+.flap .in{opacity:0}
+.flap.open .in{opacity:1;transition:opacity 0s .1s}
+.flap.open .out{opacity:0;transition:opacity 0s .1s}
+.p3 .back{clip-path:var(--torn-back)}
+.flap:focus-visible{outline:2px solid #A06A1C;outline-offset:6px}
+.hint{position:absolute;left:0;right:0;top:calc(var(--ey) + var(--eh) + 28px);margin:0;text-align:center;color:var(--muted);font-size:15px;transition:opacity .3s}
+.hint.hide{opacity:0}
+.letter{position:absolute;z-index:2;left:var(--lx);top:var(--ly);width:var(--lw);height:var(--lh);perspective:calc(var(--lh) * 2.05);transform-style:preserve-3d;
+  transform:translate(var(--tx,0),var(--ty,0)) scale(var(--ts,1));transition:transform .8s var(--ease)}
+.letter.rise{transition-duration:.6s}
+.letter.read{z-index:6}
+.panel{position:absolute;left:0;width:100%;height:33.334%;transform-style:preserve-3d;transition:transform .62s var(--ease)}
+.p1{top:0;transform-origin:50% 100%;transform:translateZ(var(--z1,0px)) rotateX(var(--a1,3deg))}
+.p2{top:33.333%}
+.p3{top:66.666%;transform-origin:50% 0;transform:translateZ(var(--z3,0px)) rotateX(var(--a3,-3deg))}
+/* the bottom third folds in first and lies flat, the top third over it a hair above: the two never cut through each other */
+.folded{--a1:-178deg;--a3:180deg;--z1:1.6px;--z3:.8px}
+.face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.front{background:var(--paper) no-repeat;background-size:100% 100%}
+.p1 .front{background-image:url("%%IMG1%%")}
+.p2 .front{background-image:url("%%IMG2%%")}
+.p3 .front{background-image:url("%%IMG3%%");clip-path:var(--torn)}
+.back{transform:rotateX(180deg);background:var(--paper) url("%%BACK%%") no-repeat;background-size:100% 300%}
+.p1 .back{background-position:0 0}
+.p2 .back{background-position:0 50%}
+.p3 .back{background-position:0 100%}
+.back::after,.front::after{content:"";position:absolute;inset:0;pointer-events:none}
+/* the creases: a soft valley of shade and a lift of light either side of each fold, never a hard line */
+.p1 .front::after{background:linear-gradient(to top,rgba(60,45,25,.10),rgba(60,45,25,0) 6%)}
+.p2 .front::after{background:linear-gradient(to bottom,rgba(255,255,255,.28),rgba(255,255,255,0) 5%,rgba(255,255,255,0) 94%,rgba(60,45,25,.08))}
+.p3 .front::after{background:linear-gradient(to bottom,rgba(255,255,255,.3),rgba(255,255,255,0) 6%)}
+.back::after{background:linear-gradient(to bottom,rgba(60,45,25,.06),rgba(60,45,25,0) 40%)}
+.letter.read .front{box-shadow:0 10px 22px -8px rgba(40,30,15,.22)}
+.night .letter.read .front{box-shadow:0 10px 24px -8px rgba(0,0,0,.6)}
+.sig{position:absolute;left:0;right:0;top:calc(var(--ly) + var(--lh) + 28px);margin:0;text-align:center;color:var(--muted);font-size:13px;opacity:0;transition:opacity .6s .3s}
+.read-done .sig{opacity:1}
+.crease{position:absolute;left:0;bottom:0;width:100%;height:3.2%;overflow:visible;pointer-events:none}
+.crease.top{top:0;bottom:auto}
+.foot{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:pre-wrap}
+.instant *{transition:none!important}
+@media (prefers-reduced-motion:reduce){.piece,.letter,.panel,.flap.torn,.hint,.sig{transition-duration:.01ms!important}}
+</style>
+<noscript><style>main{display:none}.sr{position:static;width:auto;height:auto;overflow:visible;clip-path:none;max-width:40em;margin:40px auto;padding:0 16px;font:16px/1.6 ui-monospace,monospace}</style></noscript>
+</head>
+<body class="%%BODY%%">
+<main id="main">
+<div class="piece shadow" aria-hidden="true"></div>
+<div class="piece inside" aria-hidden="true"><svg viewBox="0 0 1000 434" preserveAspectRatio="none">
+<defs>
+<pattern id="stock" patternUnits="userSpaceOnUse" width="1000" height="434"><image href="%%ENVIMG%%" width="1000" height="434" preserveAspectRatio="none"/></pattern>
+<linearGradient id="light" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="760" y2="600"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#2b1e0f" stop-opacity=".1"/></linearGradient>
+<linearGradient id="hinge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".25" stop-color="#fff" stop-opacity="0"/><stop offset=".6" stop-color="#2b1e0f" stop-opacity=".07"/><stop offset="1" stop-color="#2b1e0f" stop-opacity="0"/></linearGradient>
+<filter id="blur2" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="2.4"/></filter>
+<filter id="blur5" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="5"/></filter>
+<filter id="lift" x="-5%" y="-5%" width="110%" height="125%"><feDropShadow dx="0" dy="3.5" stdDeviation="3.4" flood-color="#2b1e0f" flood-opacity=".3"/></filter>
+<!-- wax: a puddle with a rounded rim (lit from the upper left), pressed in the middle by the seal, the mark standing proud -->
+<filter id="wax" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur in="SourceAlpha" stdDeviation="3.2" result="h"/>
+<feDiffuseLighting in="h" surfaceScale="6" diffuseConstant="1.05" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="52"/></feDiffuseLighting>
+<feSpecularLighting in="h" surfaceScale="6" specularConstant="1" specularExponent="20" lighting-color="#ffe9e2" result="s"><feDistantLight azimuth="225" elevation="44"/></feSpecularLighting>
+<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.15" result="lit"/><feComposite in="s" in2="SourceAlpha" operator="in" result="sp"/>
+<feComposite in="lit" in2="sp" operator="arithmetic" k2="1" k3=".6" result="o"/><feComposite in="o" in2="SourceAlpha" operator="in"/></filter>
+<filter id="press" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.6" result="h"/>
+<feDiffuseLighting in="h" surfaceScale="-7" diffuseConstant="1.05" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="50"/></feDiffuseLighting>
+<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.1" result="o"/><feComposite in="o" in2="SourceAlpha" operator="in"/></filter>
+<filter id="proud" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur in="SourceAlpha" stdDeviation=".9" result="h"/>
+<feSpecularLighting in="h" surfaceScale="5" specularConstant=".8" specularExponent="30" lighting-color="#ffd9cf" result="s"><feDistantLight azimuth="225" elevation="40"/></feSpecularLighting>
+<feDiffuseLighting in="h" surfaceScale="5" diffuseConstant="1" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="55"/></feDiffuseLighting>
+<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.12" result="lit"/><feComposite in="s" in2="SourceAlpha" operator="in" result="sp"/>
+<feComposite in="lit" in2="sp" operator="arithmetic" k2="1" k3=".5" result="o"/><feComposite in="o" in2="SourceAlpha" operator="in"/></filter>
+<filter id="sealDrop" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="1.5" dy="3" stdDeviation="2.6" flood-color="#2b0d08" flood-opacity=".45"/></filter>
+<clipPath id="pocketClip"><path d="M0 5Q0 0 5 0L474 236L5 434Q0 434 0 429ZM1000 5Q1000 0 995 0L526 236L995 434Q1000 434 1000 429ZM0 434L442 214Q500 186 558 214L1000 434Z"/></clipPath>
+<clipPath id="bottomClip"><path d="M0 434L442 214Q500 186 558 214L1000 434Z"/></clipPath>
+<clipPath id="flapClip"><path id="flapClipPath"/></clipPath>
+<clipPath id="lowClip"><path id="lowClipPath"/></clipPath>
+<linearGradient id="hingeIn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b1e0f" stop-opacity=".16"/><stop offset="1" stop-color="#2b1e0f" stop-opacity="0"/></linearGradient>
+</defs>
+<!-- the throat: the inside of the envelope, in its own shade -->
+<rect width="1000" height="434" rx="5" fill="url(#stock)"/><rect width="1000" height="434" rx="5" fill="#2a1d0e" opacity=".24"/>
+<path d="M0 0H1000L526 236Q500 250 474 236Z" fill="#000" opacity=".1" filter="url(#blur5)"/>
+</svg></div>
+<div class="letter folded" id="letter" aria-hidden="true">
+<div class="panel p1"><div class="face front"><svg class="crease" id="c1" viewBox="0 0 1000 40" preserveAspectRatio="none"></svg></div><div class="face back"></div></div>
+<div class="panel p2"><div class="face front"><svg class="crease top" id="c2" viewBox="0 0 1000 40" preserveAspectRatio="none"></svg><svg class="crease" id="c3" viewBox="0 0 1000 40" preserveAspectRatio="none"></svg></div><div class="face back"></div></div>
+<div class="panel p3"><div class="face front"><svg class="crease top" id="c4" viewBox="0 0 1000 40" preserveAspectRatio="none"></svg><svg class="foot" id="foot" viewBox="0 0 1000 100" preserveAspectRatio="none"></svg></div><div class="face back"></div></div>
+</div>
+<div class="piece pocket" aria-hidden="true"><svg viewBox="0 0 1000 434" preserveAspectRatio="none">
+<!-- side flaps, folded in from the side folds; their top edges are the shoulders of the throat, and cast a soft shadow below -->
+<path d="M5 0L474 236M995 0L526 236" fill="none" stroke="#2b1e0f" stroke-opacity=".26" stroke-width="6" filter="url(#blur2)" transform="translate(0 3.5)"/>
+<path d="M0 5Q0 0 5 0L474 236L5 434Q0 434 0 429Z" fill="url(#stock)"/>
+<path d="M1000 5Q1000 0 995 0L526 236L995 434Q1000 434 1000 429Z" fill="url(#stock)"/>
+<path d="M0 5Q0 0 5 0L474 236L5 434Q0 434 0 429ZM1000 5Q1000 0 995 0L526 236L995 434Q1000 434 1000 429Z" fill="#3a2a14" opacity=".045"/>
+<path d="M5 1.2L474 236M995 1.2L526 236" fill="none" stroke="#fffdf6" stroke-opacity=".45" stroke-width="1.3"/>
+<!-- the bottom flap lies over them, glued along its diagonal seams: its edge throws a soft shadow -->
+<path d="M0 434L442 214Q500 186 558 214L1000 434" fill="none" stroke="#2b1e0f" stroke-opacity=".3" stroke-width="7" filter="url(#blur2)" transform="translate(0 3)"/>
+<path d="M0 434L442 214Q500 186 558 214L1000 434Z" fill="url(#stock)"/>
+<path d="M0 434L442 214Q500 186 558 214L1000 434" fill="none" stroke="#5a4320" stroke-opacity=".045" stroke-width="30" clip-path="url(#bottomClip)"/>
+<path d="M2 433L442 214Q500 186 558 214L998 433" fill="none" stroke="#fffdf6" stroke-opacity=".5" stroke-width="1.4"/>
+<!-- the three folded edges: light on the left fold, shade on the right fold and the bottom fold -->
+<path d="M1.3 6V428" stroke="#fff" stroke-opacity=".35" stroke-width="2.6"/>
+<path d="M998.7 6V428" stroke="#2b1e0f" stroke-opacity=".1" stroke-width="2.6"/>
+<path d="M6 432.7H994" stroke="#2b1e0f" stroke-opacity=".12" stroke-width="2.6"/>
+<rect width="1000" height="434" fill="url(#light)" clip-path="url(#pocketClip)"/>
+</svg></div>
+<div class="piece flap-low" id="flapLow" hidden aria-hidden="true"><svg viewBox="0 0 1000 434" preserveAspectRatio="none">
+<g filter="url(#lift)"><path id="lowPath" fill="url(#stock)"/></g>
+<path id="lowGum" fill="#6b4e1e" fill-opacity=".035" clip-path="url(#lowClip)"/>
+<path id="lowEdge" fill="none" stroke="#fffdf6" stroke-opacity=".55" stroke-width="1.8" clip-path="url(#lowClip)"/>
+<path id="lowLight" fill="url(#light)"/>
+<path id="lowFray" fill="#fffdf7" fill-opacity=".78"/><path id="lowHair" fill="none" stroke="#fffdf7" stroke-opacity=".75" stroke-width=".8" stroke-linecap="round"/>
+<g id="sealLow"></g></svg></div>
+<div class="piece flap" id="flap" role="button" tabindex="0" aria-label="A sealed letter. Slide across the flap to tear it open, or press Enter.">
+<svg viewBox="0 0 1000 434" preserveAspectRatio="none">
+<g class="out">
+<g filter="url(#lift)"><path id="flapPath" fill="url(#stock)"/></g>
+<!-- the gummed band under the flap's edge shows through as a faint, slightly cockled stripe -->
+<path id="gum" fill="#6b4e1e" fill-opacity=".035" clip-path="url(#flapClip)"/>
+<path id="gumLine" fill="none" stroke="#fffdf6" stroke-opacity=".14" stroke-width="1" clip-path="url(#flapClip)"/>
+<path id="flapEdge" fill="none" stroke="#fffdf6" stroke-opacity=".55" stroke-width="1.8" clip-path="url(#flapClip)"/>
+<rect width="1000" height="26" fill="url(#hinge)" clip-path="url(#flapClip)"/>
+<path id="flapLight" fill="url(#light)"/>
+</g>
+<!-- the flap's inside, seen once it swings open: in shade, with the glossy band of gum along its edge -->
+<g class="in">
+<path id="inPath" fill="url(#stock)"/><path id="inShade" fill="#2a1d0e" fill-opacity=".15"/>
+<path id="inGum" fill="#a8873f" fill-opacity=".24" clip-path="url(#flapClip)"/>
+<path id="inSheen" fill="none" stroke="#fff" stroke-opacity=".13" stroke-width="10" stroke-linecap="round" clip-path="url(#flapClip)"/>
+<path id="inGumEdge" fill="none" stroke="#6e5222" stroke-opacity=".32" stroke-width="1" clip-path="url(#flapClip)"/>
+<rect width="1000" height="30" fill="url(#hingeIn)" clip-path="url(#flapClip)"/>
+</g>
+<path id="gap" fill="#1d150c" fill-opacity=".55"/>
+<path id="fray" fill="#fffdf7" fill-opacity=".78"/>
+<path id="hair" fill="none" stroke="#fffdf7" stroke-opacity=".75" stroke-width=".8" stroke-linecap="round"/>
+<g id="seal" filter="url(#sealDrop)">
+<path d="M557.5 266C558.1 267.6 558.4 269.3 558.6 271C558.8 272.6 558.7 274.3 558.6 276C558.5 277.7 558.2 279.4 557.8 281C557.5 282.7 557 284.3 556.4 285.9C555.8 287.5 555 289 554.1 290.5C553.2 291.9 552.1 293.3 550.8 294.5C549.6 295.7 548.1 296.7 546.6 297.7C545.2 298.6 543.6 299.4 542 300.2C540.5 301 539 301.7 537.6 302.5C536.2 303.2 534.9 304 533.5 304.8C532.2 305.5 531 306.4 529.7 307.1C528.4 307.9 527.1 308.6 525.7 309.2C524.3 309.7 522.8 310.1 521.3 310.4C519.8 310.6 518.2 310.6 516.7 310.6C515.2 310.5 513.7 310.3 512.2 310.2C510.7 310.1 509.3 309.9 508 309.8C506.6 309.8 505.3 309.8 504 309.9C502.6 310 501.3 310.2 500 310.3C498.7 310.5 497.3 310.6 496 310.7C494.6 310.7 493.3 310.7 491.9 310.7C490.5 310.7 489.1 310.5 487.7 310.6C486.2 310.6 484.8 310.6 483.2 310.7C481.6 310.9 479.9 311.2 478.2 311.4C476.4 311.6 474.5 312 472.6 312C470.7 312.1 468.7 312.1 467 311.7C465.3 311.3 463.6 310.6 462.3 309.6C461 308.6 459.9 307.2 459.1 305.7C458.2 304.3 457.7 302.5 457.2 300.9C456.7 299.2 456.4 297.5 456 295.9C455.6 294.3 455.3 292.8 454.8 291.3C454.4 289.8 453.9 288.4 453.5 287C453.1 285.6 452.7 284.2 452.4 282.8C452.2 281.4 452 279.9 451.9 278.5C451.9 277.1 451.9 275.6 452 274.2C452 272.8 452.1 271.4 452.1 270.1C452.1 268.7 452.1 267.4 451.9 266C451.8 264.6 451.5 263.3 451.3 261.9C451.1 260.5 450.7 259 450.6 257.5C450.4 256.1 450.3 254.6 450.3 253.1C450.3 251.6 450.4 250.1 450.6 248.6C450.8 247 451 245.5 451.2 243.9C451.5 242.4 451.7 240.8 452 239.1C452.3 237.5 452.6 235.8 453.1 234.2C453.6 232.5 454.2 230.8 455 229.4C455.9 228 457 226.6 458.3 225.6C459.7 224.6 461.3 223.8 463 223.2C464.6 222.6 466.6 222.4 468.3 222.1C470.1 221.8 471.9 221.8 473.6 221.6C475.2 221.4 476.8 221.2 478.3 220.8C479.7 220.4 481.1 219.8 482.5 219.2C483.8 218.7 485.1 217.9 486.5 217.3C487.9 216.7 489.4 216.1 490.8 215.7C492.3 215.2 493.9 214.9 495.4 214.7C496.9 214.5 498.5 214.5 500 214.5C501.5 214.4 503.1 214.4 504.7 214.3C506.2 214.3 507.8 214.2 509.4 214.2C511 214.2 512.7 214.1 514.3 214.3C515.9 214.6 517.5 214.9 518.9 215.6C520.3 216.3 521.7 217.4 522.8 218.6C523.9 219.8 524.9 221.3 525.7 222.8C526.6 224.2 527.2 225.8 528 227.2C528.7 228.6 529.4 229.9 530.2 231.1C531 232.3 531.9 233.2 532.8 234.2C533.8 235.1 534.8 235.9 535.8 236.8C536.8 237.7 537.9 238.6 538.8 239.6C539.8 240.6 540.6 241.7 541.4 242.8C542.2 243.9 542.9 245.1 543.7 246.2C544.5 247.4 545.2 248.6 546.1 249.7C546.9 250.9 547.9 252.1 548.9 253.3C549.9 254.5 551.1 255.7 552.2 257.1C553.2 258.4 554.4 259.8 555.3 261.3C556.2 262.8 557 264.4 557.5 266Z" fill="#8B2721" filter="url(#wax)"/>
+<circle cx="500" cy="266" r="32" fill="#7C201B" filter="url(#press)"/>
+<circle cx="500" cy="266" r="32.6" fill="none" stroke="#4d120e" stroke-opacity=".35" stroke-width="1"/>
+<g transform="translate(480 246) scale(.0893)" fill="#86241F" filter="url(#proud)"><path d="M0 0A112 112 0 0 1 112 112L112 224A112 112 0 0 1 0 112ZM112 0A112 112 0 0 1 224 112A112 112 0 0 1 336 0L336 112A112 112 0 0 1 224 224A112 112 0 0 1 112 112ZM448 0A112 112 0 0 0 336 112L336 224A112 112 0 0 0 448 112Z"/><path d="M0 448A112 112 0 0 0 112 336L112 224A112 112 0 0 0 0 336ZM112 448A112 112 0 0 0 224 336A112 112 0 0 0 336 448L336 336A112 112 0 0 0 224 224A112 112 0 0 0 112 336ZM448 448A112 112 0 0 1 336 336L336 224A112 112 0 0 1 448 336Z"/></g>
+<g fill="#ffd8cf" fill-opacity=".18"><circle cx="491.5" cy="229.7" r="0.9"/><circle cx="463" cy="243.2" r="0.9"/><circle cx="532.7" cy="285.2" r="1.2"/><circle cx="465.7" cy="243.6" r="1"/><circle cx="503.7" cy="304.6" r="1.3"/><circle cx="537.6" cy="268.7" r="1.1"/><circle cx="491.6" cy="230.9" r="0.9"/></g>
+</g>
+</svg></div>
+<p class="hint" id="hint">Slide across the flap to open your letter</p>
+<p class="sig">Typed on TypeWrite</p>
+</main>
+<article class="sr" id="words">%%WORDS%%</article>
+<script>
+(function () {
+  var ANIMATE = %%ANIMATE%%, IMG_W = %%IMGW%%, IMG_H = %%IMGH%%, SOUNDS = %%SOUNDS%%;
+  var calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var root = document.documentElement, main = $("main"), letter = $("letter"), flap = $("flap"), hint = $("hint");
+  function $(id) { return document.getElementById(id); }
+  function set(id, d) { $(id).setAttribute("d", d); }
+  function play(n, v) { try { var a = new Audio(SOUNDS[n]); a.volume = v || 0.8; a.play().catch(function () {}); } catch (e) {} }
+  function pts(list) { return list.map(function (q) { return q[0].toFixed(1) + " " + q[1].toFixed(1); }).join("L"); }
+  function rev(list) { return list.slice().reverse(); }
+  // A line moved sideways along its normals: positive is to the left of its direction of travel.
+  function shift(list, k) {
+    return list.map(function (q, i) {
+      var a = list[Math.max(0, i - 1)], b = list[Math.min(list.length - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+      return [q[0] + dy / l * k, q[1] - dx / l * k];
+    });
+  }
+  // A seeded wobble, so the same letter tears the same way every time it is opened.
+  var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+
+  // The torn foot of the sheet, where it was ripped from the machine: ragged on both faces, with a band of loose fibre.
+  var footY = [], n;
+  var fph = rnd() * 6.28;
+  for (n = 0; n <= 120; n++) footY.push(100 - 0.5 - 0.5 * (1 + Math.sin(n * 0.37 + fph)) * 0.6 - rnd() * 1.1);
+  root.style.setProperty("--torn", "polygon(0 0,100% 0," + footY.map(function (y, i) { return (i / 1.2).toFixed(2) + "% " + y.toFixed(2) + "%"; }).reverse().join(",") + ")");
+  root.style.setProperty("--torn-back", "polygon(" + footY.map(function (y, i) { return (i / 1.2).toFixed(2) + "% " + (100 - y).toFixed(2) + "%"; }).join(",") + ",100% 100%,0 100%)");
+  var edge = footY.map(function (y, i) { return [i * 1000 / 120, y]; });
+  $("foot").innerHTML = '<path d="M' + pts(edge) + "L" + pts(rev(edge.map(function (q) { return [q[0], q[1] - 0.35 - rnd() * 0.7]; }))) + 'Z" fill="#fffdf7" fill-opacity=".6"/>' +
+    '<path d="M' + pts(edge.map(function (q) { return [q[0], q[1] - 1.5]; })) + '" fill="none" stroke="#3c2c16" stroke-opacity=".07" stroke-width="2" vector-effect="non-scaling-stroke"/>';
+  // The two creases of the letter fold: a fine valley line where the fibres broke, with a lit ridge beside it.
+  function crease(id, top) {
+    var y = top ? 1.6 : 38.4, line = [], ridge = "", x;
+    for (x = 0; x <= 1000; x += 20) line.push([x, y + (rnd() - 0.5) * 2.2]);
+    for (x = 0; x < 1000; x += 8 + rnd() * 30) ridge += "M" + x.toFixed(1) + " " + (top ? 6 : 34) + "h" + Math.min(6 + rnd() * 26, 1000 - x).toFixed(1);  // the ridge: broken, as the fibres split unevenly
+    $(id).innerHTML = '<path d="M' + pts(line) + '" fill="none" stroke="#3c2c16" stroke-opacity=".2" stroke-width=".9" vector-effect="non-scaling-stroke"/>' +
+      '<path d="' + ridge + '" fill="none" stroke="#fff" stroke-opacity=".36" stroke-width=".8" vector-effect="non-scaling-stroke"/>';
+  }
+  crease("c1", false); crease("c2", true); crease("c3", false); crease("c4", true);
+
+  // ---- The envelope's flap: two straight cut edges meeting in a rounded point ----
+  var rim = [];
+  for (n = 0; n <= 24; n++) rim.push([440 * n / 24, 270 * n / 24]);
+  for (n = 1; n < 12; n++) { var t = n / 12, u = 1 - t; rim.push([u * u * 440 + 2 * u * t * 500 + t * t * 560, u * u * 270 + 2 * u * t * 306 + t * t * 270]); }
+  for (n = 0; n <= 24; n++) rim.push([560 + 440 * n / 24, 270 - 270 * n / 24]);
+  var GUM = 40;                                  // the gummed band: about 3/8 inch on a 4 1/8 inch envelope
+  var gumBand = "M" + pts(rim) + "L" + pts(rev(shift(rim, GUM))) + "Z", gumEdge = "M" + pts(shift(rim, GUM)), rimD = "M" + pts(rim);
+  function shape(d) { ["flapPath", "flapClipPath", "flapLight", "inPath", "inShade"].forEach(function (id) { set(id, d); }); }
+  shape("M0 0H1000L560 270Q500 306 440 270Z");
+  set("gum", gumBand); set("gumLine", gumEdge); set("flapEdge", rimD);
+  set("inGum", gumBand); set("inSheen", "M" + pts(shift(rim, GUM * 0.42))); set("inGumEdge", gumEdge);
+
+  // Where the letter tears across the flap: between its two slanted edges, a low wave with a rough grain.
+  var TY = 165, X0 = 440 * TY / 270, X1 = 1000 - X0, jag = [], ph = rnd() * 6.28, STEPS = 116;
+  for (n = 0; n <= STEPS; n++) {
+    var x = X0 + (X1 - X0) * n / STEPS, ramp = Math.min(1, 6 * n / STEPS, 6 * (STEPS - n) / STEPS);
+    jag.push([x + (n && n < STEPS ? (rnd() - 0.5) * 2 : 0), TY + ramp * (4.5 * Math.sin(x * 0.012 + ph) + (rnd() - 0.5) * 3 + (rnd() < 0.12 ? (rnd() - 0.5) * 6 : 0)), n]);
+  }
+  // The pulled-up side of a tear shows a wide feathered bevel of white fibre; the other side a narrow one. Loose fibres stand out of both.
+  var fu = jag.map(function () { return 2 + rnd() * 3.4; }), fd = jag.map(function () { return 0.6 + rnd() * 1.2; }), hairs = [];
+  jag.forEach(function (q, i) { if (i && i < STEPS && rnd() < 0.5) hairs.push([i, rnd() < 0.62 ? 1 : -1, 1.5 + rnd() * 4.5, (rnd() - 0.5) * 3]); });
+  // tip: x of the tear's running end, or null once the flap has parted.
+  function tear(list, tip) {
+    var U = [], D = [], FU = [], FD = [], have = {}, HU = "", HD = "";
+    list.forEach(function (q) {
+      var o = tip == null ? 1 : Math.min(1, Math.abs(q[0] - tip) / 34), w = tip == null ? 0 : 1.9 * o, i = q[2];
+      U.push([q[0], q[1] - w]); D.push([q[0], q[1] + w]); FU.push([q[0], q[1] - w - fu[i] * o]); FD.push([q[0], q[1] + w + fd[i] * o]);
+      have[i] = [q[0], q[1], w, o];
+    });
+    hairs.forEach(function (h) {
+      var q = have[h[0]]; if (!q || q[3] < 0.2) return;
+      var y = q[1] + h[1] * q[2], len = h[2] * q[3] * h[1], s = "M" + q[0].toFixed(1) + " " + y.toFixed(1) + "q" + (h[3] * 0.3).toFixed(1) + " " + (len * 0.6).toFixed(1) + " " + h[3].toFixed(1) + " " + len.toFixed(1);
+      if (h[1] > 0) HU += s; else HD += s;
+    });
+    return { gap: "M" + pts(U) + "L" + pts(rev(D)) + "Z", up: "M" + pts(U) + "L" + pts(rev(FU)) + "Z", down: "M" + pts(D) + "L" + pts(rev(FD)) + "Z", HU: HU, HD: HD };
+  }
+
+  function layout() {
+    var W = innerWidth, H = innerHeight;
+    var ew = Math.min(W * 0.88, 560), eh = ew * 4.125 / 9.5, ex = (W - ew) / 2, ey = Math.max(24, (H - eh) / 2 - 20);
+    var lw = Math.min(W * 0.92, 680), lh = lw * IMG_H / IMG_W, lx = (W - lw) / 2, ly = Math.max(32, (H - lh) / 2);
+    var s = root.style;
+    s.setProperty("--ex", ex + "px"); s.setProperty("--ey", ey + "px"); s.setProperty("--ew", ew + "px"); s.setProperty("--eh", eh + "px");
+    s.setProperty("--lx", lx + "px"); s.setProperty("--ly", ly + "px"); s.setProperty("--lw", lw + "px"); s.setProperty("--lh", lh + "px");
+    s.setProperty("--page-h", Math.max(H, ly + lh + 90) + "px");
+    // Folded in three, the letter sits in the pocket: its middle third, scaled to the envelope's width.
+    var k = Math.min(ew * 0.9 / lw, eh * 0.84 / (lh / 3));
+    layout.inside = { tx: ex + ew / 2 - (lx + lw / 2), ty: ey + eh * 0.56 - (ly + lh / 2), ts: k };
+    layout.out = { tx: layout.inside.tx, ty: ey - (lh / 3) * k * 0.34 - (ly + lh / 2), ts: k };
+  }
+  function place(p) { var s = letter.style; s.setProperty("--tx", p.tx + "px"); s.setProperty("--ty", p.ty + "px"); s.setProperty("--ts", p.ts); }
+  addEventListener("resize", function () { layout(); if (state === "sealed") place(layout.inside); });
+
+  var state = "sealed";
+  function reading(now) {
+    state = "read";
+    document.body.classList.add("gone");
+    letter.classList.add("read");
+    place({ tx: 0, ty: 0, ts: 1 });
+    var unfold = function () {
+      letter.classList.remove("folded");
+      letter.querySelector(".p3").style.transitionDelay = calm || now ? "0s" : ".42s";
+      if (!calm && !now) { play("unfold", 0.7); setTimeout(function () { play("fold", 0.5); }, 420); }
+      setTimeout(function () { document.body.classList.add("read-done"); }, now ? 0 : 900);
+    };
+    if (now) unfold(); else setTimeout(unfold, 650);
+  }
+  layout();
+  if (!ANIMATE) {
+    document.body.classList.add("instant", "gone", "read-done");
+    letter.classList.remove("folded"); letter.classList.add("read");
+    void letter.offsetWidth; document.body.classList.remove("instant");
+    flap.removeAttribute("role"); flap.removeAttribute("tabindex"); hint.hidden = true;
+    return;
+  }
+  letter.style.transition = "none"; place(layout.inside); void letter.offsetWidth; letter.style.transition = "";
+
+  // ---- Tearing the flap: the tear follows the finger across it, 1:1 from where it started ----
+  var p = 0, dir = 0, drag = null, raf = 0;
+  // The sound follows it too: a real paper rip (OwlishMedia, CC0) scrubbed in short grains from where the tear has reached,
+  // louder and brighter the faster it goes, silent while the finger rests or the tear closes back up.
+  var ac = null, rip = null, heard = 0, grainAt = 0;
+  function wake() {   // browsers let audio start only inside a gesture
+    try {
+      if (!ac) { ac = new (window.AudioContext || window.webkitAudioContext)(); fetch(SOUNDS.tear).then(function (r) { return r.arrayBuffer(); }).then(function (b) { return ac.decodeAudioData(b); }).then(function (b) { rip = b; }).catch(function () {}); }
+      if (ac.state !== "running") ac.resume().catch(function () {});
+    } catch (e) {}
+  }
+  ["pointerdown", "pointerup", "keydown"].forEach(function (n) { addEventListener(n, wake, true); });
+  function hear() {
+    var t = performance.now(), dp = p - heard, dt = (t - grainAt) / 1000;
+    if (dp <= 0) { heard = p; return; }
+    if (!rip || ac.state !== "running" || dt < 0.045) return;   // the tear so far is kept and heard in the next grain
+    var len = 0.07, speed = dp / dt, vol = Math.min(0.85, 0.15 + speed * 0.7), s = ac.currentTime;
+    var src = ac.createBufferSource(), g = ac.createGain();
+    src.buffer = rip; src.playbackRate.value = 0.9 + Math.min(0.3, speed * 0.12);
+    g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(vol, s + 0.012); g.gain.setValueAtTime(vol, s + len - 0.025); g.gain.linearRampToValueAtTime(0, s + len);
+    src.connect(g); g.connect(ac.destination); src.start(s, heard * (rip.duration - len), len);
+    heard = p; grainAt = t;
+  }
+  function draw() {
+    var k = Math.max(1, Math.round(p * STEPS)), list = dir < 0 ? jag.slice(STEPS - k) : jag.slice(0, k + 1);
+    if (p > 0.002) {
+      var r = tear(list, dir < 0 ? list[0][0] : list[list.length - 1][0]);
+      set("gap", r.gap); set("fray", r.up + r.down); set("hair", r.HU + r.HD);
+    } else { set("gap", ""); set("fray", ""); set("hair", ""); }
+    flap.style.setProperty("--flap", (-p * 6) + "deg");
+    hear();
+  }
+  function spring(to, v0, done) {
+    cancelAnimationFrame(raf);
+    var resp = 0.32, k = Math.pow(2 * Math.PI / resp, 2), c = 4 * Math.PI / resp, v = v0, last = performance.now();
+    (function step(t) {
+      var dt = Math.min((t - last) / 1000, 1 / 30); last = t;
+      v += (-k * (p - to) - c * v) * dt; p += v * dt;
+      if (Math.abs(p - to) < 0.002 && Math.abs(v) < 0.02) { p = to; draw(); if (done) done(); return; }
+      draw(); raf = requestAnimationFrame(step);
+    })(last);
+  }
+  function tornOpen() {
+    state = "opening";
+    hint.classList.add("hide");
+    // The flap parts along the tear: the top swings open, the sealed point stays on the pocket.
+    var r = tear(jag, null), low = "M" + pts(jag) + "L560 270Q500 306 440 270Z";
+    set("lowPath", low); set("lowClipPath", low); set("lowLight", low);
+    set("lowGum", gumBand); set("lowEdge", rimD); set("lowFray", r.down); set("lowHair", r.HD);
+    $("sealLow").appendChild($("seal"));
+    $("flapLow").hidden = false;
+    shape("M0 0H1000L" + pts(rev(jag)) + "Z");
+    set("gap", ""); set("fray", r.up); set("hair", r.HU);
+    flap.classList.add("torn");
+    requestAnimationFrame(function () { flap.classList.add("open"); flap.style.removeProperty("--flap"); });
+    flap.removeAttribute("role"); flap.removeAttribute("tabindex");
+    setTimeout(function () { letter.classList.add("rise"); place(layout.out); play("slide", 0.7); }, calm ? 0 : 380);
+    setTimeout(function () { letter.classList.remove("rise"); reading(calm); }, calm ? 0 : 1050);
+  }
+  function release(v) {
+    var unit = flap.getBoundingClientRect().width * (X1 - X0) / 1000;
+    var ahead = p + ((v * dir) / 1000) * 0.99 / (1 - 0.99) / unit;   // where the flick would carry the tear
+    if (ahead > 0.55) spring(1, (v * dir) / unit, tornOpen); else spring(0, (v * dir) / unit);
+  }
+  flap.addEventListener("pointerdown", function (e) {
+    if (state !== "sealed") return;
+    cancelAnimationFrame(raf);
+    flap.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, p0: p, hist: [[e.timeStamp, e.clientX]] }; heard = p; grainAt = performance.now();
+  });
+  flap.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.x;
+    if (!dir) { if (Math.abs(dx) < 8) return; dir = dx > 0 ? 1 : -1; drag.x = e.clientX; dx = 0; hint.classList.add("hide"); }
+    var unit = flap.getBoundingClientRect().width * (X1 - X0) / 1000;
+    p = Math.max(0, Math.min(1, drag.p0 + dx * dir / unit));
+    drag.hist.push([e.timeStamp, e.clientX]); if (drag.hist.length > 6) drag.hist.shift();
+    draw();
+  });
+  function up(e) {
+    if (!drag) return;
+    var h = drag.hist, a = h[0], b = h[h.length - 1], dt = (b[0] - a[0]) / 1000;
+    var v = dt > 0 && e.timeStamp - b[0] < 60 ? (b[1] - a[1]) / dt : 0;
+    drag = null;
+    if (dir) release(v);
+  }
+  flap.addEventListener("pointerup", up);
+  flap.addEventListener("pointercancel", up);
+  flap.addEventListener("keydown", function (e) {
+    if (state !== "sealed" || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault(); dir = 1; grainAt = performance.now(); spring(1, 4, tornOpen);
+  });
+  // Once, a small lift of the flap says it can be opened.
+  if (!calm) setTimeout(function () { if (state === "sealed" && !drag && !p) { flap.classList.add("torn"); flap.style.setProperty("--flap", "-9deg"); setTimeout(function () { flap.style.setProperty("--flap", "0deg"); setTimeout(function () { flap.classList.remove("torn"); }, 600); }, 380); } }, 1400);
+})();
+</script>
+</body>
+</html>
